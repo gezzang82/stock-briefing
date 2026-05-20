@@ -81,20 +81,17 @@ def _refresh_access_token(refresh_token: str) -> dict | None:
         return None
 
 
-def _get_access_token() -> str:
+def _get_access_token() -> tuple[str, str]:
     tokens = _load_tokens()
-    access_token = tokens.get("access_token", "")
-    refresh_token = tokens.get("refresh_token", "")
-
-    if not access_token:
-        raise ValueError("KAKAO_ACCESS_TOKEN이 설정되지 않았습니다. setup.py --kakao-auth 실행")
-
-    return access_token, refresh_token
+    return tokens.get("access_token", ""), tokens.get("refresh_token", "")
 
 
 def send_message(text: str) -> bool:
     """카카오톡 나에게 텍스트 메시지 전송"""
     access_token, refresh_token = _get_access_token()
+    if not access_token:
+        logger.info("카카오 토큰 미설정 — 메시지 전송 건너뜀")
+        return False
 
     template = {
         "object_type": "text",
