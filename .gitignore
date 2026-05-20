@@ -1,0 +1,10 @@
+.env
+.kakao_tokens
+.kis_token_cache
+venv/
+logs/
+*.db
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
