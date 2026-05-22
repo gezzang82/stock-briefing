@@ -70,9 +70,20 @@ def send_briefing(
     accuracy_text: str = "",
 ) -> bool:
     """추천 종목 브리핑을 Discord 임베드로 전송"""
+    from datetime import datetime, timezone, timedelta
     from html_report import DASHBOARD_URL
     recs = analysis["recommendations"]
     themes = ", ".join(analysis.get("key_themes", []))
+
+    # 장 시작(09:00 KST) 전이면 "전일 종가" 라벨, 장중이면 "현재가"
+    kst_now = datetime.now(timezone(timedelta(hours=9)))
+    is_premarket = kst_now.hour < 9
+    price_label = "전일 종가" if is_premarket else "현재가"
+    pct_label = "전일 등락률" if is_premarket else "등락률"
+    timing_note = (
+        f"⏰ 데이터 기준: **전일 장마감 종가** (장 시작 전 브리핑)\n\n"
+        if is_premarket else ""
+    )
 
     # 1) 메인 임베드: 시장 요약
     main_embed = {
@@ -80,6 +91,7 @@ def send_briefing(
         "url": DASHBOARD_URL,
         "color": COLOR_BLUE,
         "description": (
+            f"{timing_note}"
             f"**{kospi_str}**\n**{kosdaq_str}**\n\n"
             f"📰 {analysis.get('market_summary', '')}\n\n"
             f"🔑 **핵심 테마**: {themes}\n\n"
@@ -101,7 +113,7 @@ def send_briefing(
 
         name = f"{rec['rank']}위. [{code}] {rec['name']} {mark}"
         value = (
-            f"현재가 **{price:,.0f}원** ({sign}{abs(chg):.1f}%)\n"
+            f"{price_label} **{price:,.0f}원** ({sign}{abs(chg):.1f}%)\n"
             f"섹터: {rec.get('sector', '-')} · 목표 +{rec.get('target_return', 0):.1f}%\n"
             f"💡 {rec.get('key_catalyst', '')}\n"
             f"_{rec.get('reason', '')}_"

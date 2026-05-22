@@ -45,6 +45,18 @@ def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
         if data.get("rt_cd") != "0":
             logger.warning("거래량 순위 실패: %s", data.get("msg1"))
             return []
+        # 한국 ETF/ETN/펀드 브랜드 prefix (이름이 이걸로 시작하면 ETF류)
+        ETF_BRAND_PREFIXES = (
+            "KODEX ", "TIGER ", "ARIRANG ", "KBSTAR ", "HANARO ", "KOSEF ",
+            "KINDEX ", "KIWOOM ", "ACE ", "SOL ", "RISE ", "WOORI ", "TREX ",
+            "FOCUS ", "PLUS ", "FN ", "MASTER ", "SMART ", "TIMEFOLIO ",
+            "WON ", "BIG ", "마이다스", "삼성 ", "한투 ",
+        )
+        ETF_NAME_KEYWORDS = (
+            "ETF", "ETN", "SPAC", "리츠", "스팩", "우B",
+            "액티브", "선물지수", "인버스", "레버리지",
+        )
+
         out = []
         for r in data.get("output", []):
             code = r.get("mksc_shrn_iscd", "").strip()
@@ -52,7 +64,9 @@ def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
             # 일반 주식만 (ETF/ETN/SPAC/REIT/우선주 등 제외)
             if not (len(code) == 6 and code.isdigit()):
                 continue
-            if any(kw in name for kw in ["ETF", "ETN", "SPAC", "리츠", "스팩", "우B"]):
+            if any(name.startswith(p) for p in ETF_BRAND_PREFIXES):
+                continue
+            if any(kw in name for kw in ETF_NAME_KEYWORDS):
                 continue
             if name.endswith("우") and len(name) >= 3:  # 우선주 (~우, ~2우B 등)
                 continue

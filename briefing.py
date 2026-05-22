@@ -48,6 +48,20 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
     logger.info("종목 검증/시세 조회: %s", codes)
     price_map = kis.get_multiple_prices(codes)
 
+    # ETF/ETN/펀드 패턴 (검증 단계 2차 방어선)
+    ETF_BRAND_PREFIXES = (
+        "KODEX ", "TIGER ", "ARIRANG ", "KBSTAR ", "HANARO ", "KOSEF ",
+        "KINDEX ", "KIWOOM ", "ACE ", "SOL ", "RISE ", "WOORI ", "TREX ",
+        "FOCUS ", "PLUS ", "FN ", "MASTER ", "SMART ", "TIMEFOLIO ",
+        "WON ", "BIG ",
+    )
+    ETF_NAME_KEYWORDS = ("ETF", "ETN", "SPAC", "리츠", "액티브",
+                        "선물지수", "인버스", "레버리지")
+
+    def _is_etf_like(name: str) -> bool:
+        return (any(name.startswith(p) for p in ETF_BRAND_PREFIXES)
+                or any(kw in name for kw in ETF_NAME_KEYWORDS))
+
     # 3) 인식 + 종목명 확보 + ETF/ETN 제외 + 이름 덮어쓰기
     cleaned = []
     for r in unique:
@@ -56,14 +70,13 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
         if not pdata:
             logger.warning("⚠️ KIS 미인식 코드 드롭: %s (AI 이름: %s)", code, r.get("name"))
             continue
-        # 종목명은 inquire-price에 없으므로 별도 조회 (캐시됨)
         kis_name = kis.get_stock_name(code)
         ai_name = (r.get("name") or "").strip()
         if not kis_name:
             logger.warning("⚠️ KIS 종목명 조회 실패 - 드롭: [%s] (AI 이름: %s)", code, ai_name)
             continue
-        if kis.is_etf_or_etn(code):
-            logger.warning("⚠️ ETF/ETN 드롭: [%s] %s", code, kis_name)
+        if _is_etf_like(kis_name):
+            logger.warning("⚠️ ETF/펀드 드롭: [%s] %s", code, kis_name)
             continue
         if kis_name != ai_name:
             logger.info("종목명 정정: [%s] %s → %s", code, ai_name, kis_name)
