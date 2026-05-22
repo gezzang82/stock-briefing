@@ -193,41 +193,125 @@ def compute_indicators(ohlcv: list[dict]) -> dict | None:
     }
 
 
-def score_candidate(ind: dict) -> tuple[float, list[str]]:
-    """기술적 점수 + 시그널 라벨 (총점 최대 110점)"""
+def compute_supply_demand(code: str, ohlcv: list[dict]) -> dict:
+    """
+    수급/거래대금 지표 집계.
+
+    Returns:
+      - foreign_5d_million / instit_5d_million: 외국인/기관 5일 누적 순매수 (백만원)
+      - foreign_ratio / instit_ratio: 5일 거래대금 대비 비중 (decimal, +/-)
+      - value_ratio: 오늘 거래대금 / 직전 5일 평균
+      - program_net_won: 프로그램 매매 당일 누적 순매수 (원)
+    """
+    # 5일 외국인/기관 누적
+    investor = kis.get_investor_trend(code, days=10)
+    time.sleep(0.1)
+    last5 = investor[-5:] if len(investor) >= 5 else investor
+    foreign_5d = sum(d["foreign_value"] for d in last5)  # 백만원
+    instit_5d = sum(d["instit_value"] for d in last5)
+
+    # 프로그램 매매 당일 누적
+    prog = kis.get_program_trading(code)
+    time.sleep(0.1)
+    program_net = prog["net_value_won"] if prog else 0
+
+    # 거래대금 (close × volume) 기반 비중 + 증가율
+    # 단위 일치: ohlcv 거래대금 = 원, investor value = 백만원 → ×1e6
+    value_ratio = 1.0
+    foreign_ratio = 0.0
+    instit_ratio = 0.0
+    if len(ohlcv) >= 6:
+        daily_values = [b["close"] * b["volume"] for b in ohlcv[-6:]]  # 원
+        today_value = daily_values[-1]
+        prev_5d_avg = sum(daily_values[:-1]) / 5
+        value_ratio = today_value / prev_5d_avg if prev_5d_avg > 0 else 1.0
+
+        total_5d_value = sum(daily_values[-6:-1])  # 직전 5일 거래대금 합 (원)
+        if total_5d_value > 0:
+            foreign_ratio = (foreign_5d * 1_000_000) / total_5d_value
+            instit_ratio = (instit_5d * 1_000_000) / total_5d_value
+
+    return {
+        "foreign_5d_million": foreign_5d,
+        "instit_5d_million": instit_5d,
+        "foreign_ratio": foreign_ratio,
+        "instit_ratio": instit_ratio,
+        "value_ratio": value_ratio,
+        "program_net_won": program_net,
+    }
+
+
+def score_candidate(ind: dict, supply: dict) -> tuple[float, list[str]]:
+    """
+    수급/거래대금 기반 점수 (총점 100점):
+      - 외국인 수급 40%
+      - 기관 수급 30%
+      - 거래대금 증가율 30%
+
+    기존 기술 시그널(MA/RSI/돌파)은 표시 라벨로만 포함, 점수에 미반영.
+    """
     score = 0.0
     signals: list[str] = []
 
-    vr = ind["volume_ratio"]
+    # ========== 외국인 (max 40) ==========
+    fr_pct = supply["foreign_ratio"] * 100  # 거래대금 대비 비중 %
+    if fr_pct >= 5.0:
+        score += 40; signals.append(f"외국인 강매수 {fr_pct:+.1f}%")
+    elif fr_pct >= 2.0:
+        score += 30; signals.append(f"외국인 순매수 {fr_pct:+.1f}%")
+    elif fr_pct >= 0.5:
+        score += 20
+    elif fr_pct > 0:
+        score += 10
+    elif fr_pct <= -2.0:
+        signals.append(f"외국인 순매도 {fr_pct:+.1f}%")
+    # 0% ~ -2%는 0점
+
+    # ========== 기관 (max 30) ==========
+    in_pct = supply["instit_ratio"] * 100
+    if in_pct >= 5.0:
+        score += 30; signals.append(f"기관 강매수 {in_pct:+.1f}%")
+    elif in_pct >= 2.0:
+        score += 22; signals.append(f"기관 순매수 {in_pct:+.1f}%")
+    elif in_pct >= 0.5:
+        score += 15
+    elif in_pct > 0:
+        score += 7
+    elif in_pct <= -2.0:
+        signals.append(f"기관 순매도 {in_pct:+.1f}%")
+
+    # ========== 거래대금 증가율 (max 30) ==========
+    vr = supply["value_ratio"]
     if vr >= 3.0:
-        score += 30; signals.append(f"거래량 폭증({vr:.1f}x)")
+        score += 30; signals.append(f"거래대금 폭증 {vr:.1f}x")
     elif vr >= 2.0:
-        score += 20; signals.append(f"거래량 급증({vr:.1f}x)")
+        score += 25; signals.append(f"거래대금 급증 {vr:.1f}x")
     elif vr >= 1.5:
+        score += 20; signals.append(f"거래대금 +{(vr-1)*100:.0f}%")
+    elif vr >= 1.2:
+        score += 15
+    elif vr >= 1.0:
         score += 10
 
+    # ========== 프로그램 매매 (참고 라벨, 점수 미반영) ==========
+    prog_billion = supply["program_net_won"] / 1e8
+    if abs(prog_billion) >= 10:
+        sign = "+" if prog_billion > 0 else ""
+        signals.append(f"프로그램 {sign}{prog_billion:.0f}억")
+
+    # ========== 기술 시그널 (참고 라벨, 점수 미반영) ==========
+    if ind["is_breakout"]:
+        signals.append("20일 신고가 돌파")
     if ind["is_uptrend"]:
-        score += 20; signals.append("정배열(5>20>60)")
-
+        signals.append("정배열(5>20>60)")
     rsi = ind["rsi14"]
-    if 30 <= rsi <= 70:
-        score += 10
-    elif rsi < 30:
-        score += 15; signals.append(f"과매도(RSI {rsi:.0f})")
+    if rsi < 30:
+        signals.append(f"과매도 RSI {rsi:.0f}")
     elif rsi > 80:
-        score -= 5; signals.append(f"과열(RSI {rsi:.0f})")
-
+        signals.append(f"과열 RSI {rsi:.0f}")
     m20 = ind["momentum_20d"]
     if m20 > 10:
-        score += 15; signals.append(f"20일 모멘텀 +{m20:.1f}%")
-    elif m20 > 5:
-        score += 10
-
-    if ind["is_breakout"]:
-        score += 25; signals.append("20일 신고가 돌파")
-
-    if ind["dist_from_high_pct"] > -5:
-        score += 10; signals.append("60일 고점 근접")
+        signals.append(f"20일 +{m20:.1f}%")
 
     return score, signals
 
@@ -247,14 +331,18 @@ def screen_candidates(top_n: int = 20) -> list[dict]:
     candidates = []
     for v in volume_top:
         ohlcv = get_daily_ohlcv(v["code"], days=60)
-        time.sleep(0.1)  # rate limit (10 req/sec)
+        time.sleep(0.1)
         if not ohlcv:
             continue
         ind = compute_indicators(ohlcv)
         if not ind:
             continue
-        score, signals = score_candidate(ind)
-        candidates.append({**v, "indicators": ind, "score": score, "signals": signals})
+        supply = compute_supply_demand(v["code"], ohlcv)  # KIS 호출 2건 + sleep 내부
+        score, signals = score_candidate(ind, supply)
+        candidates.append({
+            **v, "indicators": ind, "supply": supply,
+            "score": score, "signals": signals,
+        })
 
     candidates.sort(key=lambda x: x["score"], reverse=True)
     top = candidates[:top_n]
@@ -270,18 +358,25 @@ def screen_candidates(top_n: int = 20) -> list[dict]:
 
 
 def format_for_prompt(candidates: list[dict]) -> str:
-    """AI 프롬프트에 넣을 문자열 포맷"""
+    """AI 프롬프트에 넣을 문자열 포맷 (점수 = 외국인40+기관30+거래대금30)"""
     if not candidates:
         return "(기술적 스크리닝 데이터 없음)"
     lines = []
     for c in candidates:
         ind = c["indicators"]
+        sup = c.get("supply", {})
         sigs = ", ".join(c["signals"]) if c["signals"] else "특이 시그널 없음"
+        f_pct = sup.get("foreign_ratio", 0) * 100
+        i_pct = sup.get("instit_ratio", 0) * 100
+        vr = sup.get("value_ratio", 1.0)
+        prog_b = sup.get("program_net_won", 0) / 1e8
         lines.append(
             f"  - [{c['code']}] {c['name']} (점수 {c['score']:.0f}): "
-            f"현재가 {c['current_price']:,.0f}원 ({c['change_pct']:+.2f}%), "
-            f"거래량 {ind['volume_ratio']:.1f}배, RSI {ind['rsi14']:.0f}, "
-            f"MA20대비 {ind['price_vs_ma20']:+.1f}%, 20일모멘텀 {ind['momentum_20d']:+.1f}%\n"
+            f"현재가 {c['current_price']:,.0f}원 ({c['change_pct']:+.2f}%)\n"
+            f"    수급: 외국인 {f_pct:+.2f}%, 기관 {i_pct:+.2f}%, "
+            f"거래대금 {vr:.2f}x, 프로그램 {prog_b:+.0f}억\n"
+            f"    기술: RSI {ind['rsi14']:.0f}, MA20대비 {ind['price_vs_ma20']:+.1f}%, "
+            f"20일모멘텀 {ind['momentum_20d']:+.1f}%\n"
             f"    시그널: {sigs}"
         )
     return "\n".join(lines)

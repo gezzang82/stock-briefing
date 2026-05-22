@@ -197,6 +197,77 @@ class KISClient:
             logger.debug("종목명 조회 오류 [%s]: %s", code, e)
             return None
 
+    def get_investor_trend(self, code: str, days: int = 10) -> list[dict]:
+        """
+        일별 외국인/기관/개인 매매동향 (최근 N일).
+        반환: [{date, close, foreign_qty, foreign_value, instit_qty, instit_value, ...}]
+        value 단위: 백만원
+        """
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor"
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": code,
+        }
+        try:
+            resp = requests.get(url, headers=self._headers("FHKST01010900"),
+                                params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                return []
+            rows = data.get("output", []) or []
+            out = []
+            for r in rows[:days]:
+                try:
+                    out.append({
+                        "date": r["stck_bsop_date"],
+                        "close": float(r["stck_clpr"]),
+                        "foreign_qty": int(r.get("frgn_ntby_qty", 0) or 0),
+                        "foreign_value": int(r.get("frgn_ntby_tr_pbmn", 0) or 0),
+                        "instit_qty": int(r.get("orgn_ntby_qty", 0) or 0),
+                        "instit_value": int(r.get("orgn_ntby_tr_pbmn", 0) or 0),
+                        "personal_qty": int(r.get("prsn_ntby_qty", 0) or 0),
+                        "personal_value": int(r.get("prsn_ntby_tr_pbmn", 0) or 0),
+                    })
+                except (ValueError, KeyError, TypeError):
+                    continue
+            out.sort(key=lambda x: x["date"])  # 오래된 것이 앞
+            return out
+        except Exception as e:
+            logger.debug("투자자 매매동향 오류 [%s]: %s", code, e)
+            return []
+
+    def get_program_trading(self, code: str) -> dict | None:
+        """
+        프로그램 매매 당일 누적 (분별 시계열에서 최신값 = output[0]).
+        반환: {net_qty, net_value_won, buy_value_won, sell_value_won}
+        """
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/program-trade-by-stock"
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": code,
+        }
+        try:
+            resp = requests.get(url, headers=self._headers("FHPPG04650100"),
+                                params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                return None
+            rows = data.get("output") or []
+            if not rows:
+                return None
+            latest = rows[0]
+            return {
+                "net_qty": int(latest.get("whol_smtn_ntby_qty", 0) or 0),
+                "net_value_won": int(latest.get("whol_smtn_ntby_tr_pbmn", 0) or 0),
+                "buy_value_won": int(latest.get("whol_smtn_shnu_tr_pbmn", 0) or 0),
+                "sell_value_won": int(latest.get("whol_smtn_seln_tr_pbmn", 0) or 0),
+            }
+        except Exception as e:
+            logger.debug("프로그램 매매 오류 [%s]: %s", code, e)
+            return None
+
     def is_etf_or_etn(self, code: str) -> bool:
         """get_stock_name 호출 후에만 의미 있음. 마켓 구분이 ETF/ETN인지 판단."""
         prdt_type = _NAME_CACHE.get(f"_type_{code}", "")
