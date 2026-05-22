@@ -6,7 +6,7 @@ from datetime import date
 
 from accuracy_tracker import format_accuracy_summary, record_prices_for_active_recs
 from ai_analyzer import analyze_and_recommend
-from database import init_db, save_recommendations
+from database import get_recent_recommended_stocks, init_db, save_recommendations
 from discord_sender import send_briefing as send_discord_briefing
 from kis_api import kis
 from news_fetcher import fetch_financial_news
@@ -92,8 +92,12 @@ def run_daily_briefing():
     logger.info("뉴스 수집 중...")
     news_text = fetch_financial_news(max_articles=40)
 
-    # 4. AI 분석
-    analysis = analyze_and_recommend(news_text, kospi_display, kosdaq_display)
+    # 4. AI 분석 (최근 7일 추천 종목을 회피 힌트로 전달)
+    recent = get_recent_recommended_stocks(days=7)
+    logger.info("최근 7일 추천 이력: %d개 종목 (회피 힌트로 전달)", len(recent))
+    analysis = analyze_and_recommend(
+        news_text, kospi_display, kosdaq_display, recent_excluded=recent,
+    )
 
     # 5. 종목 검증 (코드 유효성/중복/이름 정정) — 시세 조회까지 한 번에
     cleaned_recs, price_map = _validate_and_clean_recommendations(analysis["recommendations"])

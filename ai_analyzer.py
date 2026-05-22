@@ -23,6 +23,9 @@ KOSDAQ: {kosdaq}
 === 최신 금융 뉴스 ===
 {news}
 
+=== 최근 7일 이미 추천된 종목 (가급적 제외) ===
+{recent_excluded}
+
 위 정보를 바탕으로 다음 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
 
 {{
@@ -60,6 +63,9 @@ KOSDAQ: {kosdaq}
 4. 다양한 섹터에서 선정 (한 섹터 최대 3개)
 5. risk_level은 "낮음", "중간", "높음" 중 하나
 6. target_return은 숫자만 (단위: %)
+7. **최근 7일 추천 목록과 가급적 겹치지 않게 다른 종목으로 다양화**.
+   다만 새로운 강력한 모멘텀(실적 발표, 정책 변화 등)이 있어 다시 추천할
+   가치가 있다면 포함 가능 — 그 경우 reason에 재추천 이유 명시.
 """
 
 
@@ -76,10 +82,25 @@ def _parse_ai_response(text: str) -> dict:
         raise
 
 
-def analyze_and_recommend(news_text: str, kospi: str, kosdaq: str) -> dict:
+def _format_recent_excluded(recent: list[dict] | None) -> str:
+    if not recent:
+        return "(최근 추천 이력 없음 — 자유롭게 선정)"
+    lines = []
+    for r in recent[:30]:  # 토큰 절약 — 최대 30개
+        lines.append(
+            f"  - [{r['stock_code']}] {r['stock_name']} "
+            f"(최근 {r['last_date']}, {r['times']}회 추천)"
+        )
+    return "\n".join(lines)
+
+
+def analyze_and_recommend(
+    news_text: str, kospi: str, kosdaq: str,
+    recent_excluded: list[dict] | None = None,
+) -> dict:
     """
     뉴스와 시장 지표를 분석하여 추천 종목 반환.
-    반환값: {"market_summary": ..., "key_themes": [...], "risk_factors": ..., "recommendations": [...]}
+    recent_excluded: 최근 7일 추천 종목 목록 — AI가 회피하도록 힌트로 전달
     """
     client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -89,6 +110,7 @@ def analyze_and_recommend(news_text: str, kospi: str, kosdaq: str) -> dict:
         kospi=kospi,
         kosdaq=kosdaq,
         news=news_text,
+        recent_excluded=_format_recent_excluded(recent_excluded),
     )
 
     logger.info("AI 분석 시작...")
