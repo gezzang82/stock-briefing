@@ -1,0 +1,44 @@
+name: DB 덤프 (디버그)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: stock-briefing
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: DB 캐시 복원
+        uses: actions/cache@v4
+        with:
+          path: |
+            stock_briefing.db
+            .kis_token_cache
+          key: stock-state-dump-${{ github.run_id }}
+          restore-keys: |
+            stock-state-
+            stock-db-
+
+      - name: 추천 종목 전체 덤프
+        run: |
+          python3 -c "
+          import sqlite3
+          conn = sqlite3.connect('stock_briefing.db')
+          conn.row_factory = sqlite3.Row
+          rows = conn.execute('SELECT rec_date, rank, stock_code, stock_name, sector, entry_price, target_return_pct, risk_level FROM recommendations ORDER BY rec_date DESC, rank ASC').fetchall()
+          print(f'총 {len(rows)}건')
+          for r in rows:
+              print(f\"[{r['rec_date']}] {r['rank']:2d}. [{r['stock_code']}] {r['stock_name']:<20} ({r['sector']}) entry={r['entry_price']} risk={r['risk_level']}\")
+          "
+
+      - name: DB artifact 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-briefing-db
+          path: stock_briefing.db
+          retention-days: 1
