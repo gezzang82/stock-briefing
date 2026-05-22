@@ -46,14 +46,20 @@ def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
             logger.warning("거래량 순위 실패: %s", data.get("msg1"))
             return []
         out = []
-        for r in data.get("output", [])[:count]:
+        for r in data.get("output", []):
             code = r.get("mksc_shrn_iscd", "").strip()
-            if not code:
+            name = r.get("hts_kor_isnm", "").strip()
+            # 일반 주식만 (ETF/ETN/SPAC/REIT/우선주 등 제외)
+            if not (len(code) == 6 and code.isdigit()):
+                continue
+            if any(kw in name for kw in ["ETF", "ETN", "SPAC", "리츠", "스팩", "우B"]):
+                continue
+            if name.endswith("우") and len(name) >= 3:  # 우선주 (~우, ~2우B 등)
                 continue
             try:
                 out.append({
                     "code": code,
-                    "name": r.get("hts_kor_isnm", "").strip(),
+                    "name": name,
                     "current_price": float(r.get("stck_prpr", 0) or 0),
                     "change_pct": float(r.get("prdy_ctrt", 0) or 0),
                     "volume": int(r.get("acml_vol", 0) or 0),
@@ -61,6 +67,8 @@ def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
                 })
             except (ValueError, TypeError) as e:
                 logger.debug("거래량 순위 행 파싱 실패: %s", e)
+            if len(out) >= count:
+                break
         return out
     except Exception as e:
         logger.error("거래량 순위 조회 오류: %s", e)
