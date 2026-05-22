@@ -6,12 +6,20 @@ on:
   workflow_dispatch:     # 수동 실행 가능
 
 concurrency:
-  group: stock-briefing  # 메인 브리핑과 동일 그룹 — DB/토큰 충돌 방지
+  group: stock-briefing
   cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   report:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: 코드 체크아웃
@@ -42,8 +50,24 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python weekly_report.py
 
+      - name: GitHub Pages 설정
+        if: hashFiles('public/index.html') != ''
+        uses: actions/configure-pages@v5
+
+      - name: Pages 아티팩트 업로드
+        if: hashFiles('public/index.html') != ''
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+      - name: GitHub Pages 배포
+        if: hashFiles('public/index.html') != ''
+        id: deployment
+        uses: actions/deploy-pages@v4
+
       - name: 실행 결과 요약
         if: always()
         run: |
           echo "## 주간 리포트 실행" >> $GITHUB_STEP_SUMMARY
           echo "- 시각 (KST): $(TZ='Asia/Seoul' date)" >> $GITHUB_STEP_SUMMARY
+          echo "- 대시보드: ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY

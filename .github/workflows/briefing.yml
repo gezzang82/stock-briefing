@@ -12,9 +12,18 @@ concurrency:
   group: stock-briefing
   cancel-in-progress: false
 
+# GitHub Pages 배포 권한
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   briefing:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: 코드 체크아웃
@@ -51,6 +60,21 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python main.py --run-now
+
+      - name: GitHub Pages 설정
+        if: hashFiles('public/index.html') != ''
+        uses: actions/configure-pages@v5
+
+      - name: Pages 아티팩트 업로드
+        if: hashFiles('public/index.html') != ''
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+      - name: GitHub Pages 배포
+        if: hashFiles('public/index.html') != ''
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       - name: 실행 결과 요약
         if: always()

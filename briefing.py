@@ -110,7 +110,21 @@ def run_daily_briefing():
     # 8. 활성 추천에 대해 오늘 가격 기록 (적중률 추적용)
     record_prices_for_active_recs()
 
-    # 9. Discord 브리핑 전송
+    # 9. HTML 대시보드 갱신 (GitHub Pages용)
+    try:
+        from accuracy_tracker import get_all_monthly_stats
+        from html_report import generate_html_report
+        from weekly_report import fetch_period_items, fetch_sector_performance, HTML_OUTPUT
+        generate_html_report(
+            get_all_monthly_stats(months_limit=12),
+            fetch_period_items(days=7),
+            fetch_sector_performance(days=30),
+            HTML_OUTPUT,
+        )
+    except Exception as e:
+        logger.warning("HTML 대시보드 생성 실패 (전송은 계속): %s", e)
+
+    # 10. Discord 브리핑 전송
     accuracy_text = format_accuracy_summary()
     logger.info("Discord 브리핑 전송 중...")
     ok = send_discord_briefing(

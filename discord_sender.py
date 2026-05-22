@@ -70,18 +70,21 @@ def send_briefing(
     accuracy_text: str = "",
 ) -> bool:
     """추천 종목 브리핑을 Discord 임베드로 전송"""
+    from html_report import DASHBOARD_URL
     recs = analysis["recommendations"]
     themes = ", ".join(analysis.get("key_themes", []))
 
     # 1) 메인 임베드: 시장 요약
     main_embed = {
         "title": f"📈 주식 AI 브리핑 [{today}]",
+        "url": DASHBOARD_URL,
         "color": COLOR_BLUE,
         "description": (
             f"**{kospi_str}**\n**{kosdaq_str}**\n\n"
             f"📰 {analysis.get('market_summary', '')}\n\n"
             f"🔑 **핵심 테마**: {themes}\n\n"
-            f"⚠️ **리스크**: {analysis.get('risk_factors', '')}"
+            f"⚠️ **리스크**: {analysis.get('risk_factors', '')}\n\n"
+            f"📱 [전체 통계 대시보드 →]({DASHBOARD_URL})"
         )[:4096],
     }
 
