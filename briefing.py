@@ -70,11 +70,16 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
             r["name"] = kis_name
         cleaned.append(r)
 
-    # 4) 1부터 재정렬
+    # 4) TOP_N_STOCKS로 자르고 1부터 재정렬
+    from config import TOP_N_STOCKS
+    cleaned = cleaned[:TOP_N_STOCKS]
     for i, r in enumerate(cleaned, 1):
         r["rank"] = i
 
-    logger.info("검증 완료: %d개 → %d개 (드롭 %d)", len(recs), len(cleaned), len(recs) - len(cleaned))
+    logger.info(
+        "검증 완료: AI %d개 → 유효 %d개 → 최종 %d개 (드롭 %d)",
+        len(recs), len(cleaned), len(cleaned), len(recs) - len(cleaned),
+    )
     return cleaned, price_map
 
 

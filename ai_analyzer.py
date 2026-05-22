@@ -108,8 +108,10 @@ def analyze_and_recommend(
     """
     client = OpenAI(api_key=OPENAI_API_KEY)
 
+    # 검증에서 일부 드롭될 가능성을 고려해 버퍼 포함하여 더 많이 요청
+    ai_n = TOP_N_STOCKS + 3
     prompt = ANALYSIS_PROMPT.format(
-        n=TOP_N_STOCKS,
+        n=ai_n,
         date=date.today().strftime("%Y년 %m월 %d일"),
         kospi=kospi,
         kosdaq=kosdaq,
@@ -136,9 +138,11 @@ def analyze_and_recommend(
     try:
         result = _parse_ai_response(response_text)
         recs = result.get("recommendations", [])
-        if len(recs) < TOP_N_STOCKS:
-            raise ValueError(f"추천 종목 수 부족: {len(recs)}/{TOP_N_STOCKS}")
-        logger.info("AI 분석 완료 - 추천 종목 %d개", len(recs))
+        # 검증에서 일부 드롭될 가능성 — TOP_N의 70% 이상이면 진행
+        min_acceptable = max(TOP_N_STOCKS - 3, int(TOP_N_STOCKS * 0.7))
+        if len(recs) < min_acceptable:
+            raise ValueError(f"추천 종목 수 부족: {len(recs)} < {min_acceptable}")
+        logger.info("AI 분석 완료 - 추천 종목 %d개 (목표 %d)", len(recs), TOP_N_STOCKS)
         return result
     except Exception as e:
         logger.error("AI 응답 파싱 실패: %s\n응답: %s", e, response_text[:500])
