@@ -100,10 +100,10 @@ def send_briefing(
         )[:4096],
     }
 
-    # 2) 추천 종목 임베드 (각 종목을 field로)
+    # 2) 추천 종목 임베드 (종목별 field + 분리 빈 field)
     risk_emoji = {"낮음": "🟢", "중간": "🟡", "높음": "🔴"}
     fields = []
-    for rec in recs:
+    for i, rec in enumerate(recs):
         code = rec["code"]
         price_info = price_map.get(code, {})
         price = price_info.get("current_price", 0)
@@ -112,15 +112,20 @@ def send_briefing(
         mark = risk_emoji.get(rec.get("risk_level", "중간"), "🟡")
 
         naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
-        name = f"{rec['rank']}위. [{code}] {rec['name']} {mark}"
+        field_name = f"{rec['rank']}위  {mark}"
+        # 종목명을 굵게+밑줄+링크로 → 버튼 느낌
         value = (
+            f"**[__{rec['name']}__]({naver_url})**  `{code}`\n"
             f"{price_label} **{price:,.0f}원** ({sign}{abs(chg):.1f}%)\n"
             f"섹터: {rec.get('sector', '-')} · 목표 +{rec.get('target_return', 0):.1f}%\n"
             f"💡 {rec.get('key_catalyst', '')}\n"
-            f"_{rec.get('reason', '')}_\n"
-            f"🔗 [네이버 증권에서 보기]({naver_url})"
+            f"_{rec.get('reason', '')}_"
         )
-        fields.append({"name": name[:256], "value": value[:1024], "inline": False})
+        fields.append({"name": field_name[:256], "value": value[:1024], "inline": False})
+        # 마지막 종목이 아니면 분리용 빈 필드 추가 (Discord field 한도 25개 내)
+        # 10 종목 + 9 분리 = 19 필드 → 25 한도 내
+        if i < len(recs) - 1:
+            fields.append({"name": "​", "value": "​", "inline": False})
 
     recs_embed = {
         "title": f"📊 추천 종목 TOP {len(recs)}",
