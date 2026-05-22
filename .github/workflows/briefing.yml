@@ -2,7 +2,9 @@ name: 주식 브리핑
 
 on:
   schedule:
-    - cron: '30 21 * * *'  # 매일 06:30 KST (UTC 기준 전날 21:30)
+    # KST 월~금 06:30 = UTC 일~목 21:30 (cron day-of-week: 0=일,1=월...6=토)
+    # 공휴일은 main.py 내부에서 KRX 캘린더로 추가 필터링
+    - cron: '30 21 * * 0-4'
   workflow_dispatch:         # 수동 실행 버튼 활성화
 
 # 동시 실행 방지 - KIS 토큰 중복 발급 차단

@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 
 
 def run_now():
+    from market_calendar import is_krx_closed
+    closed, reason = is_krx_closed()
+    if closed and "--force" not in sys.argv:
+        logger.info("KRX 휴장일 (%s) — 브리핑 건너뜀. 강제 실행하려면 --force", reason)
+        return
+
     from briefing import run_daily_briefing
     from accuracy_tracker import update_accuracy
     try:
