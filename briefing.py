@@ -92,11 +92,23 @@ def run_daily_briefing():
     logger.info("뉴스 수집 중...")
     news_text = fetch_financial_news(max_articles=40)
 
-    # 4. AI 분석 (최근 7일 추천 종목을 회피 힌트로 전달)
+    # 4a. 기술적 스크리닝 (실패해도 fallback)
+    try:
+        from technical_screener import screen_candidates, format_for_prompt
+        tech_candidates = screen_candidates(top_n=20)
+        tech_text = format_for_prompt(tech_candidates)
+        logger.info("기술적 후보 %d개를 AI에 전달", len(tech_candidates))
+    except Exception as e:
+        logger.warning("기술적 스크리닝 실패 — 뉴스 기반으로 폴백: %s", e)
+        tech_text = ""
+
+    # 4b. AI 분석 (뉴스 + 기술적 후보 + 최근 7일 회피)
     recent = get_recent_recommended_stocks(days=7)
     logger.info("최근 7일 추천 이력: %d개 종목 (회피 힌트로 전달)", len(recent))
     analysis = analyze_and_recommend(
-        news_text, kospi_display, kosdaq_display, recent_excluded=recent,
+        news_text, kospi_display, kosdaq_display,
+        recent_excluded=recent,
+        tech_candidates_text=tech_text,
     )
 
     # 5. 종목 검증 (코드 유효성/중복/이름 정정) — 시세 조회까지 한 번에

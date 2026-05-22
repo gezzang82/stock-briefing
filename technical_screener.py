@@ -1,0 +1,273 @@
+"""
+기술적 스크리닝 모듈
+- KIS 거래량 순위 API로 후보 추출
+- 각 후보의 일봉 OHLCV 가져와서 지표 계산
+- 점수화 후 상위 N개 + 시그널 반환
+
+AI 분석에 후보 목록 + 지표를 전달하기 위한 전처리 단계.
+"""
+import logging
+import time
+from datetime import date, timedelta
+
+import requests
+
+from config import KIS_BASE_URL
+from kis_api import kis
+
+logger = logging.getLogger(__name__)
+
+
+# ============== KIS API 래퍼 ==============
+
+def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
+    """KIS 거래량 순위 (평균 거래량 대비 급증)"""
+    url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
+    market_code = {"ALL": "0000", "KOSPI": "0001", "KOSDAQ": "1001"}.get(market, "0000")
+    params = {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_COND_SCR_DIV_CODE": "20171",
+        "FID_INPUT_ISCD": market_code,
+        "FID_DIV_CLS_CODE": "0",
+        "FID_BLNG_CLS_CODE": "1",  # 1=거래증가율 (vol surge)
+        "FID_TRGT_CLS_CODE": "111111111",
+        "FID_TRGT_EXLS_CLS_CODE": "0000000000",
+        "FID_INPUT_PRICE_1": "",
+        "FID_INPUT_PRICE_2": "",
+        "FID_VOL_CNT": "",
+        "FID_INPUT_DATE_1": "",
+    }
+    try:
+        resp = requests.get(url, headers=kis._headers("FHPST01710000"),
+                            params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("rt_cd") != "0":
+            logger.warning("거래량 순위 실패: %s", data.get("msg1"))
+            return []
+        out = []
+        for r in data.get("output", [])[:count]:
+            code = r.get("mksc_shrn_iscd", "").strip()
+            if not code:
+                continue
+            try:
+                out.append({
+                    "code": code,
+                    "name": r.get("hts_kor_isnm", "").strip(),
+                    "current_price": float(r.get("stck_prpr", 0) or 0),
+                    "change_pct": float(r.get("prdy_ctrt", 0) or 0),
+                    "volume": int(r.get("acml_vol", 0) or 0),
+                    "volume_ratio_kis": float(r.get("vol_inrt", 0) or 0),
+                })
+            except (ValueError, TypeError) as e:
+                logger.debug("거래량 순위 행 파싱 실패: %s", e)
+        return out
+    except Exception as e:
+        logger.error("거래량 순위 조회 오류: %s", e)
+        return []
+
+
+def get_daily_ohlcv(code: str, days: int = 60) -> list[dict]:
+    """일봉 OHLCV (수정주가). 최신이 리스트 마지막."""
+    url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+    end = date.today().strftime("%Y%m%d")
+    # 공휴일/주말 고려해서 days × 1.6 만큼 거슬러 조회
+    start = (date.today() - timedelta(days=int(days * 1.6))).strftime("%Y%m%d")
+    params = {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD": code,
+        "FID_INPUT_DATE_1": start,
+        "FID_INPUT_DATE_2": end,
+        "FID_PERIOD_DIV_CODE": "D",
+        "FID_ORG_ADJ_PRC": "0",  # 0=수정주가
+    }
+    try:
+        resp = requests.get(url, headers=kis._headers("FHKST03010100"),
+                            params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("rt_cd") != "0":
+            return []
+        rows = data.get("output2", []) or []
+        bars = []
+        for r in rows:
+            if not r.get("stck_clpr"):
+                continue
+            try:
+                bars.append({
+                    "date": r["stck_bsop_date"],
+                    "open": float(r["stck_oprc"]),
+                    "high": float(r["stck_hgpr"]),
+                    "low": float(r["stck_lwpr"]),
+                    "close": float(r["stck_clpr"]),
+                    "volume": int(r["acml_vol"]),
+                })
+            except (ValueError, KeyError):
+                continue
+        bars.sort(key=lambda x: x["date"])
+        return bars[-days:]
+    except Exception as e:
+        logger.debug("일봉 조회 오류 [%s]: %s", code, e)
+        return []
+
+
+# ============== 지표 계산 ==============
+
+def _rsi(closes: list[float], period: int = 14) -> float:
+    if len(closes) < period + 1:
+        return 50.0
+    gains, losses = [], []
+    for i in range(1, len(closes)):
+        d = closes[i] - closes[i - 1]
+        gains.append(max(d, 0))
+        losses.append(max(-d, 0))
+    avg_g = sum(gains[-period:]) / period
+    avg_l = sum(losses[-period:]) / period
+    if avg_l == 0:
+        return 100.0
+    rs = avg_g / avg_l
+    return 100 - (100 / (1 + rs))
+
+
+def compute_indicators(ohlcv: list[dict]) -> dict | None:
+    if len(ohlcv) < 20:
+        return None
+
+    closes = [b["close"] for b in ohlcv]
+    volumes = [b["volume"] for b in ohlcv]
+    highs = [b["high"] for b in ohlcv]
+    cur = closes[-1]
+
+    ma5 = sum(closes[-5:]) / 5
+    ma20 = sum(closes[-20:]) / 20
+    ma60 = sum(closes[-60:]) / min(60, len(closes))
+
+    vol_5d_avg = sum(volumes[-5:]) / 5
+    vol_ratio = volumes[-1] / vol_5d_avg if vol_5d_avg > 0 else 0
+
+    momentum_5d = (cur / closes[-6] - 1) * 100 if len(closes) >= 6 else 0
+    momentum_20d = (cur / closes[-21] - 1) * 100 if len(closes) >= 21 else 0
+
+    rsi14 = _rsi(closes, 14)
+
+    high_period = max(highs)
+    dist_from_high = (cur / high_period - 1) * 100
+
+    prior_highs = highs[-21:-1] if len(highs) >= 21 else highs[:-1]
+    is_breakout = bool(prior_highs) and cur > max(prior_highs)
+
+    return {
+        "current": cur,
+        "ma5": ma5, "ma20": ma20, "ma60": ma60,
+        "price_vs_ma20": (cur / ma20 - 1) * 100 if ma20 else 0,
+        "volume_ratio": vol_ratio,
+        "momentum_5d": momentum_5d,
+        "momentum_20d": momentum_20d,
+        "rsi14": rsi14,
+        "dist_from_high_pct": dist_from_high,
+        "is_breakout": is_breakout,
+        "is_uptrend": ma5 > ma20 > ma60,
+    }
+
+
+def score_candidate(ind: dict) -> tuple[float, list[str]]:
+    """기술적 점수 + 시그널 라벨 (총점 최대 110점)"""
+    score = 0.0
+    signals: list[str] = []
+
+    vr = ind["volume_ratio"]
+    if vr >= 3.0:
+        score += 30; signals.append(f"거래량 폭증({vr:.1f}x)")
+    elif vr >= 2.0:
+        score += 20; signals.append(f"거래량 급증({vr:.1f}x)")
+    elif vr >= 1.5:
+        score += 10
+
+    if ind["is_uptrend"]:
+        score += 20; signals.append("정배열(5>20>60)")
+
+    rsi = ind["rsi14"]
+    if 30 <= rsi <= 70:
+        score += 10
+    elif rsi < 30:
+        score += 15; signals.append(f"과매도(RSI {rsi:.0f})")
+    elif rsi > 80:
+        score -= 5; signals.append(f"과열(RSI {rsi:.0f})")
+
+    m20 = ind["momentum_20d"]
+    if m20 > 10:
+        score += 15; signals.append(f"20일 모멘텀 +{m20:.1f}%")
+    elif m20 > 5:
+        score += 10
+
+    if ind["is_breakout"]:
+        score += 25; signals.append("20일 신고가 돌파")
+
+    if ind["dist_from_high_pct"] > -5:
+        score += 10; signals.append("60일 고점 근접")
+
+    return score, signals
+
+
+# ============== 메인 ==============
+
+def screen_candidates(top_n: int = 20) -> list[dict]:
+    """기술적 스크리닝 전체 파이프라인"""
+    logger.info("기술적 스크리닝 시작...")
+
+    volume_top = get_volume_ranking(count=30)
+    if not volume_top:
+        logger.warning("거래량 순위 조회 결과 없음 — 스크리닝 건너뜀")
+        return []
+    logger.info("거래량 순위 1차 후보: %d개", len(volume_top))
+
+    candidates = []
+    for v in volume_top:
+        ohlcv = get_daily_ohlcv(v["code"], days=60)
+        time.sleep(0.1)  # rate limit (10 req/sec)
+        if not ohlcv:
+            continue
+        ind = compute_indicators(ohlcv)
+        if not ind:
+            continue
+        score, signals = score_candidate(ind)
+        candidates.append({**v, "indicators": ind, "score": score, "signals": signals})
+
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    top = candidates[:top_n]
+
+    if top:
+        logger.info(
+            "스크리닝 완료: %d개 → 상위 %d개 (점수 %.0f~%.0f)",
+            len(candidates), len(top), top[0]["score"], top[-1]["score"],
+        )
+    else:
+        logger.warning("스크리닝 결과 없음")
+    return top
+
+
+def format_for_prompt(candidates: list[dict]) -> str:
+    """AI 프롬프트에 넣을 문자열 포맷"""
+    if not candidates:
+        return "(기술적 스크리닝 데이터 없음)"
+    lines = []
+    for c in candidates:
+        ind = c["indicators"]
+        sigs = ", ".join(c["signals"]) if c["signals"] else "특이 시그널 없음"
+        lines.append(
+            f"  - [{c['code']}] {c['name']} (점수 {c['score']:.0f}): "
+            f"현재가 {c['current_price']:,.0f}원 ({c['change_pct']:+.2f}%), "
+            f"거래량 {ind['volume_ratio']:.1f}배, RSI {ind['rsi14']:.0f}, "
+            f"MA20대비 {ind['price_vs_ma20']:+.1f}%, 20일모멘텀 {ind['momentum_20d']:+.1f}%\n"
+            f"    시그널: {sigs}"
+        )
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    result = screen_candidates(top_n=20)
+    print(format_for_prompt(result))
