@@ -155,7 +155,6 @@ def _stock_table(items: list[dict], title: str,
         rows.append(
             f"<tr{hidden_attr}>"
             f"<td>{it['rec_date']}</td>"
-            f'<td><a href="{url}" target="_blank" rel="noopener">{it["stock_code"]}</a></td>'
             f'<td><a href="{url}" target="_blank" rel="noopener">{it["stock_name"]}</a></td>'
             f"<td>{it.get('sector') or '-'}</td>"
             f'<td class="{cls}">{sign}{abs(ret):.2f}%</td>'
@@ -177,10 +176,10 @@ def _stock_table(items: list[dict], title: str,
         f"<h3>{title} <span style='font-size:0.8rem;color:var(--muted);font-weight:normal'>"
         f"(총 {total}개)</span></h3>"
         f'<p style="font-size:0.8rem;color:var(--muted);margin:0 0 0.3rem">'
-        f"수익률 높은 순 · 종목명/코드를 누르면 네이버 증권에서 열립니다</p>"
+        f"수익률 높은 순 · 종목명을 누르면 네이버 증권에서 열립니다</p>"
         f'<div class="table-wrap"><table>'
         f"<thead><tr>"
-        f"<th>추천일</th><th>코드</th><th>종목명</th><th>섹터</th><th>수익률</th>"
+        f"<th>추천일</th><th>종목명</th><th>섹터</th><th>수익률</th>"
         f"</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
