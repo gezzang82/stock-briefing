@@ -1,0 +1,40 @@
+name: DB 덤프 (디버그)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: stock-briefing
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: DB 캐시 복원
+        uses: actions/cache@v4
+        with:
+          path: |
+            stock_briefing.db
+            .kis_token_cache
+          key: stock-state-dump-${{ github.run_id }}
+          restore-keys: |
+            stock-state-
+            stock-db-
+
+      - name: 추천 종목 + reason 덤프
+        run: |
+          python3 -c "
+          import sqlite3
+          conn = sqlite3.connect('stock_briefing.db')
+          conn.row_factory = sqlite3.Row
+          rows = conn.execute('SELECT rec_date, rank, stock_code, stock_name, sector, entry_price, target_return_pct, risk_level, key_catalyst, reason FROM recommendations WHERE rec_date = (SELECT MAX(rec_date) FROM recommendations) ORDER BY rank ASC').fetchall()
+          print(f'최신 추천 ({rows[0][\"rec_date\"] if rows else \"없음\"}): 총 {len(rows)}개')
+          for r in rows:
+              print(f\"[{r['rank']:2d}] [{r['stock_code']}] {r['stock_name']:<20} ({r['sector']}) entry={r['entry_price']:,.0f}\")
+              print(f'     💡 {r[\"key_catalyst\"]}')
+              print(f'     ↳  {r[\"reason\"][:200]}')
+              print()
+          "
