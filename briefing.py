@@ -48,7 +48,7 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
     logger.info("종목 검증/시세 조회: %s", codes)
     price_map = kis.get_multiple_prices(codes)
 
-    # 3) 인식되는 코드만 유지 + 실제 이름으로 덮어쓰기
+    # 3) 인식 + 종목명 확보 + ETF/ETN 제외 + 이름 덮어쓰기
     cleaned = []
     for r in unique:
         code = r["code"]
@@ -56,9 +56,16 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
         if not pdata:
             logger.warning("⚠️ KIS 미인식 코드 드롭: %s (AI 이름: %s)", code, r.get("name"))
             continue
-        kis_name = (pdata.get("name") or "").strip()
+        # 종목명은 inquire-price에 없으므로 별도 조회 (캐시됨)
+        kis_name = kis.get_stock_name(code)
         ai_name = (r.get("name") or "").strip()
-        if kis_name and kis_name != ai_name:
+        if not kis_name:
+            logger.warning("⚠️ KIS 종목명 조회 실패 - 드롭: [%s] (AI 이름: %s)", code, ai_name)
+            continue
+        if kis.is_etf_or_etn(code):
+            logger.warning("⚠️ ETF/ETN 드롭: [%s] %s", code, kis_name)
+            continue
+        if kis_name != ai_name:
             logger.info("종목명 정정: [%s] %s → %s", code, ai_name, kis_name)
             r["name"] = kis_name
         cleaned.append(r)

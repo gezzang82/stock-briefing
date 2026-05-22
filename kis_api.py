@@ -23,6 +23,15 @@ INDEX_CODES = {
     "KOSDAQ": "1001",
 }
 
+# 종목코드 → 종목명 인메모리 캐시 (런타임 동안 유지)
+_NAME_CACHE: dict[str, str] = {}
+
+
+def cache_stock_name(code: str, name: str):
+    """종목명 캐시 (volume-rank, daily-chart 응답에서 발견 시 호출)"""
+    if code and name:
+        _NAME_CACHE[code] = name.strip()
+
 
 class KISClient:
     def __init__(self):
@@ -144,6 +153,54 @@ class KISClient:
                 result[code] = price_data
             time.sleep(0.1)  # API rate limit
         return result
+
+    def get_stock_name(self, code: str) -> str | None:
+        """
+        종목명 조회. inquire-price 응답에 hts_kor_isnm이 없으므로
+        inquire-daily-itemchartprice의 output1.hts_kor_isnm을 사용.
+        결과는 _NAME_CACHE에 저장하여 재호출 방지.
+        """
+        if code in _NAME_CACHE:
+            return _NAME_CACHE[code]
+
+        from datetime import date, timedelta
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+        end = date.today().strftime("%Y%m%d")
+        start = (date.today() - timedelta(days=7)).strftime("%Y%m%d")
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": code,
+            "FID_INPUT_DATE_1": start,
+            "FID_INPUT_DATE_2": end,
+            "FID_PERIOD_DIV_CODE": "D",
+            "FID_ORG_ADJ_PRC": "0",
+        }
+        try:
+            resp = requests.get(
+                url, headers=self._headers("FHKST03010100"), params=params, timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                logger.warning("종목명 조회 실패 [%s]: %s", code, data.get("msg1"))
+                return None
+            output1 = data.get("output1") or {}
+            name = (output1.get("hts_kor_isnm") or "").strip()
+            prdt_type = (output1.get("rprs_mrkt_kor_name") or "").strip()
+            if not name:
+                return None
+            cache_stock_name(code, name)
+            # prdt_type 정보도 같이 캐시 (ETF/ETN 필터링용)
+            _NAME_CACHE[f"_type_{code}"] = prdt_type
+            return name
+        except Exception as e:
+            logger.debug("종목명 조회 오류 [%s]: %s", code, e)
+            return None
+
+    def is_etf_or_etn(self, code: str) -> bool:
+        """get_stock_name 호출 후에만 의미 있음. 마켓 구분이 ETF/ETN인지 판단."""
+        prdt_type = _NAME_CACHE.get(f"_type_{code}", "")
+        return any(kw in prdt_type for kw in ["ETF", "ETN", "ELW"])
 
 
 kis = KISClient()

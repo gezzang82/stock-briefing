@@ -13,7 +13,7 @@ from datetime import date, timedelta
 import requests
 
 from config import KIS_BASE_URL
-from kis_api import kis
+from kis_api import cache_stock_name, kis
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,7 @@ def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
                     "volume": int(r.get("acml_vol", 0) or 0),
                     "volume_ratio_kis": float(r.get("vol_inrt", 0) or 0),
                 })
+                cache_stock_name(code, name)  # 후속 검증에서 재호출 방지
             except (ValueError, TypeError) as e:
                 logger.debug("거래량 순위 행 파싱 실패: %s", e)
             if len(out) >= count:
