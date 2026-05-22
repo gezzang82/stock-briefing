@@ -72,33 +72,41 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th {{ background: #f8f9fa; font-weight: 600; font-size: 0.8rem; color: var(--muted); }}
   td:last-child, th:last-child {{ text-align: right; }}
   td a {{ color: #2980b9; text-decoration: none; }}
-  td a:not(.stock-cell) {{ border-bottom: 1px dashed #b9d6e8; }}
+  td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
   td a:hover {{ color: #1c5980; }}
-  td a.stock-cell .stock-name {{ border-bottom: 1px dashed #b9d6e8; }}
-  td a.stock-cell:hover .stock-name {{ border-bottom-color: #1c5980; }}
   td.mfe-mae {{ font-size: 0.78rem; white-space: nowrap; line-height: 1.35; }}
   td.mfe-mae .row {{ display: block; }}
-  td.stock-col {{ padding-top: 6px; padding-bottom: 6px; }}
-  .sector-tag {{
-    display: inline-block; font-size: 0.7rem;
-    color: white; padding: 1px 8px; border-radius: 10px;
-    font-weight: 500; line-height: 1.4;
-    margin-bottom: 4px;
-  }}
+  td.stock-col {{ padding: 10px; }}
   td.amount-col {{ vertical-align: middle; font-weight: 600; }}
+  /* Stock cell: logo + (sector tag / stock name) */
+  .stock-link {{ display: block; text-decoration: none; color: inherit; }}
+  .stock-row {{ display: flex; align-items: center; gap: 10px; }}
+  .stock-info {{ display: flex; flex-direction: column; gap: 3px; min-width: 0; }}
+  .stock-info .stock-name {{
+    color: var(--text); font-weight: 500;
+    border-bottom: 1px dashed transparent;
+  }}
+  .stock-link:hover .stock-name {{
+    color: #2980b9; border-bottom-color: #2980b9;
+  }}
+  .sector-tag {{
+    display: inline-block; font-size: 0.68rem;
+    padding: 2px 9px; border-radius: 10px;
+    line-height: 1.5; font-weight: 700;
+    /* color and background set inline per sector */
+  }}
   .stock-logo, .stock-logo-fb {{
-    display: inline-block; width: 22px; height: 22px;
-    margin-right: 6px; vertical-align: middle;
+    display: inline-block; width: 36px; height: 36px;
+    vertical-align: middle;
     border-radius: 50%; overflow: hidden;
     flex-shrink: 0;
   }}
   .stock-logo {{ background: white; border: 1px solid var(--border); }}
   .stock-logo img {{ width: 100%; height: 100%; object-fit: contain; display: block; }}
   .stock-logo-fb {{
-    color: white; font-size: 11px; font-weight: 700;
-    text-align: center; line-height: 22px;
+    color: white; font-size: 14px; font-weight: 700;
+    text-align: center; line-height: 36px;
   }}
-  td .stock-cell {{ display: inline-flex; align-items: center; }}
   .show-more-wrap {{ text-align: center; margin-top: 0.8rem; }}
   .show-more-btn {{
     background: white; border: 1px solid var(--border); color: var(--text);
@@ -197,11 +205,20 @@ def _sector_color(sector: str | None) -> str:
     return _SECTOR_FB_PALETTE[sum(ord(c) for c in sector) % len(_SECTOR_FB_PALETTE)]
 
 
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    """#RRGGBB → rgba(R, G, B, alpha)"""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 def _sector_tag(sector: str | None) -> str:
+    """진한 글자색 + 같은 색의 연한 배경"""
     if not sector or sector == "-":
-        return '<span class="sector-tag" style="background:#bdc3c7">-</span>'
+        return '<span class="sector-tag" style="color:#7f8c8d;background:#ecf0f1">-</span>'
     color = _sector_color(sector)
-    return f'<span class="sector-tag" style="background:{color}">{sector}</span>'
+    bg = _hex_to_rgba(color, 0.13)
+    return f'<span class="sector-tag" style="color:{color};background:{bg}">{sector}</span>'
 
 
 def _logo_html(code: str, name: str) -> str:
@@ -255,9 +272,15 @@ def _stock_table(items: list[dict], title: str,
             f"<tr{hidden_attr}>"
             f"<td>{date_short}</td>"
             f'<td class="stock-col">'
-            f'<div>{sector_tag}</div>'
-            f'<a href="{url}" target="_blank" rel="noopener" class="stock-cell">'
-            f'{logo}<span class="stock-name">{it["stock_name"]}</span></a>'
+            f'<a href="{url}" target="_blank" rel="noopener" class="stock-link">'
+            f'<div class="stock-row">'
+            f"{logo}"
+            f'<div class="stock-info">'
+            f"<div>{sector_tag}</div>"
+            f'<span class="stock-name">{it["stock_name"]}</span>'
+            f"</div>"
+            f"</div>"
+            f"</a>"
             f"</td>"
             f'<td class="amount-col {cls}">{sign}{abs(ret):.2f}%</td>'
             f'<td class="mfe-mae">{mfe_mae_cell}</td>'
