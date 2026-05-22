@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # ============== KIS API 래퍼 ==============
 
-def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
+def get_volume_ranking(count: int = 50, market: str = "ALL") -> list[dict]:
     """KIS 거래량 순위 (평균 거래량 대비 급증)"""
     url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
     market_code = {"ALL": "0000", "KOSPI": "0001", "KOSDAQ": "1001"}.get(market, "0000")
@@ -50,7 +50,7 @@ def get_volume_ranking(count: int = 30, market: str = "ALL") -> list[dict]:
             "KODEX ", "TIGER ", "ARIRANG ", "KBSTAR ", "HANARO ", "KOSEF ",
             "KINDEX ", "KIWOOM ", "ACE ", "SOL ", "RISE ", "WOORI ", "TREX ",
             "FOCUS ", "PLUS ", "FN ", "MASTER ", "SMART ", "TIMEFOLIO ",
-            "WON ", "BIG ", "마이다스", "삼성 ", "한투 ",
+            "WON ", "BIG ", "마이다스 ",
         )
         ETF_NAME_KEYWORDS = (
             "ETF", "ETN", "SPAC", "리츠", "스팩", "우B",
