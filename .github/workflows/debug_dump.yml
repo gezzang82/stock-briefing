@@ -24,17 +24,23 @@ jobs:
             stock-state-
             stock-db-
 
-      - name: 추천 종목 + reason 덤프
+      - name: KIS 검증 raw 호출
+        env:
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+          KIS_ACCOUNT_NO: ${{ secrets.KIS_ACCOUNT_NO }}
+          KIS_IS_VIRTUAL: 'false'
         run: |
+          pip install -q -r requirements.txt
           python3 -c "
-          import sqlite3
-          conn = sqlite3.connect('stock_briefing.db')
-          conn.row_factory = sqlite3.Row
-          rows = conn.execute('SELECT rec_date, rank, stock_code, stock_name, sector, entry_price, target_return_pct, risk_level, key_catalyst, reason FROM recommendations WHERE rec_date = (SELECT MAX(rec_date) FROM recommendations) ORDER BY rank ASC').fetchall()
-          print(f'최신 추천 ({rows[0][\"rec_date\"] if rows else \"없음\"}): 총 {len(rows)}개')
-          for r in rows:
-              print(f\"[{r['rank']:2d}] [{r['stock_code']}] {r['stock_name']:<20} ({r['sector']}) entry={r['entry_price']:,.0f}\")
-              print(f'     💡 {r[\"key_catalyst\"]}')
-              print(f'     ↳  {r[\"reason\"][:200]}')
-              print()
+          from kis_api import kis
+          codes = ['003550', '034730', '005740', '459790', '011230', '026910', '027040', '009420', '066570', '015760']
+          print(f'{\"code\":<10}{\"KIS name\":<25}{\"current\":<12}{\"rt_cd\"}')
+          print('-'*70)
+          for c in codes:
+              data = kis.get_stock_price(c)
+              if data:
+                  print(f\"{c:<10}{data['name']:<25}{data['current_price']:<12,.0f}OK\")
+              else:
+                  print(f'{c:<10}<None - 조회 실패>')
           "
