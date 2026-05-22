@@ -90,9 +90,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     color: #2980b9; border-bottom-color: #2980b9;
   }}
   .sector-tag {{
-    display: inline-block; font-size: 0.68rem;
-    padding: 2px 9px; border-radius: 10px;
-    line-height: 1.5; font-weight: 700;
+    display: inline-block; font-size: 0.6rem;
+    padding: 1px 7px; border-radius: 8px;
+    line-height: 1.4; font-weight: 700;
+    letter-spacing: -0.01em;
     /* color and background set inline per sector */
   }}
   .stock-logo, .stock-logo-fb {{
@@ -254,8 +255,11 @@ def _stock_table(items: list[dict], title: str,
         url = _naver_url(it["stock_code"])
         # initial_visible 이후 행은 숨김
         hidden_attr = ' style="display:none" data-hidden="1"' if i >= initial_visible else ""
-        # YYYY-MM-DD → YY-MM-DD (세기 부분 생략)
-        date_short = it["rec_date"][2:] if len(it["rec_date"]) == 10 else it["rec_date"]
+        # YYYY-MM-DD → YY.MM.DD
+        if len(it["rec_date"]) == 10:
+            date_short = it["rec_date"][2:].replace("-", ".")
+        else:
+            date_short = it["rec_date"]
         logo = _logo_html(it["stock_code"], it["stock_name"])
         sector_tag = _sector_tag(it.get("sector"))
         # 변동폭 2줄
