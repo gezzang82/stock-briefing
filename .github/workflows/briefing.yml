@@ -22,12 +22,15 @@ jobs:
       - name: 패키지 설치
         run: pip install -r requirements.txt
 
-      - name: DB 캐시 복원 (accuracy_tracker 데이터 유지)
+      - name: DB / KIS 토큰 캐시 복원
         uses: actions/cache@v4
         with:
-          path: stock_briefing.db
-          key: stock-db-${{ github.run_id }}
+          path: |
+            stock_briefing.db
+            .kis_token_cache
+          key: stock-state-${{ github.run_id }}
           restore-keys: |
+            stock-state-
             stock-db-
 
       - name: 브리핑 실행
