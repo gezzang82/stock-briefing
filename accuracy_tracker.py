@@ -103,7 +103,7 @@ def update_all_outcomes():
     """
     from database import get_conn
     with get_conn() as conn:
-        rec_ids = [r["id"] for r in conn.execute(
+        rec_ids = [r["recommendation_id"] for r in conn.execute(
             "SELECT DISTINCT recommendation_id FROM price_tracking"
         ).fetchall()]
 
