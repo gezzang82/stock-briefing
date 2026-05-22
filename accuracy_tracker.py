@@ -125,17 +125,154 @@ def update_accuracy():
     return results
 
 
-def format_accuracy_summary() -> str:
-    """최근 적중률 요약 (카카오 메시지용)"""
-    from database import get_recent_accuracy
-    rows = get_recent_accuracy(limit=5)
-    if not rows:
-        return ""
+# ============== 티어 기반 평가 ==============
 
-    lines = ["\n📊 최근 추천 적중률"]
+TIER_LABELS = [
+    "+30% 이상",
+    "+10~+30%",
+    "+5~+10%",
+    "0~+5%",
+    "-5~0%",
+    "-10~-5%",
+    "-30~-10%",
+    "-30% 이하",
+]
+
+# matplotlib 차트용 ASCII 라벨 (Linux 러너 한글 폰트 없음)
+TIER_LABELS_EN = [
+    "≥ +30%",
+    "+10 ~ +30%",
+    "+5 ~ +10%",
+    "0 ~ +5%",
+    "-5 ~ 0%",
+    "-10 ~ -5%",
+    "-30 ~ -10%",
+    "≤ -30%",
+]
+
+# 좋음(초록) → 나쁨(빨강) 그라디언트
+TIER_COLORS = [
+    "#1A9850", "#66BD63", "#A6D96A", "#D9EF8B",
+    "#FEE08B", "#FDAE61", "#F46D43", "#A50026",
+]
+
+
+def classify_tier_index(ret: float) -> int:
+    """수익률 → 티어 인덱스 (0=최고, 7=최악)"""
+    from config import TIER_BOUNDARIES
+    for i, boundary in enumerate(TIER_BOUNDARIES):
+        if ret >= boundary:
+            return i
+    return len(TIER_BOUNDARIES)  # < 마지막 경계
+
+
+def get_monthly_tier_stats(year_month: str | None = None) -> dict:
+    """
+    특정 월(YYYY-MM)에 추천된 종목들의 만기(2주) 시점 티어 분포.
+    None이면 현재 월.
+    """
+    if year_month is None:
+        year_month = date.today().strftime("%Y-%m")
+
+    today = date.today()
+
+    from database import get_conn
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT r.id, r.rec_date,
+                      (SELECT pt.return_pct FROM price_tracking pt
+                       WHERE pt.recommendation_id = r.id
+                       ORDER BY pt.track_date DESC LIMIT 1) AS latest_return
+               FROM recommendations r
+               WHERE substr(r.rec_date, 1, 7) = ?
+               ORDER BY r.rec_date, r.rank""",
+            (year_month,),
+        ).fetchall()
+
+    matured_returns: list[float] = []
+    in_progress = 0
+    pending = 0
+
     for row in rows:
-        lines.append(
-            f"  {row['rec_date']}: {row['hit_count']}/{row['total_stocks']}종목 "
-            f"({row['hit_rate_pct']:.0f}%) | 평균 {row['avg_return_pct']:+.1f}%"
+        rec_date = date.fromisoformat(row["rec_date"])
+        days_passed = (today - rec_date).days
+        if row["latest_return"] is None:
+            pending += 1
+            continue
+        if days_passed >= TRACKING_DAYS:
+            matured_returns.append(row["latest_return"])
+        else:
+            in_progress += 1
+
+    tier_counts = [0] * (len(TIER_LABELS))
+    for ret in matured_returns:
+        tier_counts[classify_tier_index(ret)] += 1
+
+    n = len(matured_returns)
+    return {
+        "month": year_month,
+        "total_recs": len(rows),
+        "matured_count": n,
+        "in_progress_count": in_progress,
+        "pending_count": pending,
+        "tier_counts": tier_counts,
+        "tier_labels": TIER_LABELS,
+        "avg_return": sum(matured_returns) / n if n else 0.0,
+        "win_rate": sum(1 for r in matured_returns if r > 0) / n * 100 if n else 0.0,
+        "strong_win_rate": sum(1 for r in matured_returns if r >= 5) / n * 100 if n else 0.0,
+        "best": max(matured_returns) if matured_returns else 0.0,
+        "worst": min(matured_returns) if matured_returns else 0.0,
+    }
+
+
+def get_all_monthly_stats(months_limit: int = 12) -> list[dict]:
+    """추천이 존재하는 최근 N개월의 티어 통계 (과거→최신 순)"""
+    from database import get_conn
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT DISTINCT substr(rec_date, 1, 7) AS month
+               FROM recommendations
+               ORDER BY month DESC
+               LIMIT ?""",
+            (months_limit,),
+        ).fetchall()
+    months = [r["month"] for r in rows]
+    months.reverse()  # 과거 → 최신
+    return [get_monthly_tier_stats(m) for m in months]
+
+
+def format_accuracy_summary() -> str:
+    """현재 월 티어 분포 요약 (일일 브리핑 푸터용)"""
+    stats = get_monthly_tier_stats()
+    month = stats["month"]
+
+    # 아직 만기 종목 없음
+    if stats["matured_count"] == 0:
+        if stats["total_recs"] == 0:
+            return ""
+        return (
+            f"\n📊 {month} 추적 중\n"
+            f"  추천 {stats['total_recs']}개 (만기 미도달, {TRACKING_DAYS}일 후 평가)"
         )
+
+    lines = [
+        f"\n📊 {month} 적중 분포 ({stats['matured_count']}개 만기"
+    ]
+    if stats["in_progress_count"]:
+        lines[0] += f", 진행중 {stats['in_progress_count']}개"
+    lines[0] += ")"
+
+    total = stats["matured_count"]
+    for label, count in zip(TIER_LABELS, stats["tier_counts"]):
+        if count == 0:
+            continue
+        pct = count / total * 100
+        bar = "▓" * min(count, 10)
+        lines.append(f"  {label:<10} {count:>2}개 ({pct:>4.1f}%) {bar}")
+
+    lines.append(
+        f"  평균 {stats['avg_return']:+.2f}% · "
+        f"승률(>0%) {stats['win_rate']:.0f}% · "
+        f"강승(≥5%) {stats['strong_win_rate']:.0f}%"
+    )
     return "\n".join(lines)

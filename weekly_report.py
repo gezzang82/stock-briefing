@@ -1,22 +1,25 @@
 """
 주간 백테스트 리포트
-- 지난 30일치 추천 종목 성과 분석
-- 적중률/평균수익률 차트 생성
-- Discord에 임베드 + 차트 이미지로 전송
+- 월별 티어 분포 (8개 버킷: +30%↑ ~ -30%↓) - 월 기준 리셋
+- 이번 주 TOP/BOTTOM 5
+- 섹터별 성과
+- Discord 임베드 + 차트 이미지 첨부
 """
 import logging
 import os
 import tempfile
-from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 import matplotlib
 
-matplotlib.use("Agg")  # GUI 없는 환경(CI)에서 필요
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib import dates as mdates
 
-from config import DB_PATH, HIT_THRESHOLD_PCT
+from accuracy_tracker import (
+    TIER_COLORS, TIER_LABELS, TIER_LABELS_EN,
+    get_all_monthly_stats, get_monthly_tier_stats,
+)
+from config import DB_PATH
 from database import get_conn
 from discord_sender import post_with_file
 
@@ -31,19 +34,12 @@ def fetch_period_stats(days: int = 7) -> dict:
     start = (today - timedelta(days=days)).isoformat()
 
     with get_conn() as conn:
-        # 종목별 최신 추적 가격 (return_pct)
         rows = conn.execute(
             """SELECT r.id, r.rec_date, r.rank, r.stock_code, r.stock_name,
                       r.sector, r.entry_price, r.target_return_pct, r.risk_level,
                       (SELECT pt.return_pct FROM price_tracking pt
                        WHERE pt.recommendation_id = r.id
-                       ORDER BY pt.track_date DESC LIMIT 1) AS latest_return,
-                      (SELECT pt.close_price FROM price_tracking pt
-                       WHERE pt.recommendation_id = r.id
-                       ORDER BY pt.track_date DESC LIMIT 1) AS latest_price,
-                      (SELECT pt.track_date FROM price_tracking pt
-                       WHERE pt.recommendation_id = r.id
-                       ORDER BY pt.track_date DESC LIMIT 1) AS latest_date
+                       ORDER BY pt.track_date DESC LIMIT 1) AS latest_return
                FROM recommendations r
                WHERE r.rec_date >= ?
                ORDER BY r.rec_date DESC, r.rank ASC""",
@@ -51,10 +47,7 @@ def fetch_period_stats(days: int = 7) -> dict:
         ).fetchall()
 
     items = [dict(r) for r in rows]
-
-    # 전체 통계
     valid = [x for x in items if x["latest_return"] is not None]
-    hits = [x for x in valid if x["latest_return"] >= HIT_THRESHOLD_PCT]
 
     return {
         "period_days": days,
@@ -62,40 +55,8 @@ def fetch_period_stats(days: int = 7) -> dict:
         "end_date": today.isoformat(),
         "total": len(items),
         "tracked": len(valid),
-        "hit_count": len(hits),
-        "hit_rate": (len(hits) / len(valid) * 100) if valid else 0.0,
-        "avg_return": (sum(x["latest_return"] for x in valid) / len(valid)) if valid else 0.0,
         "items": items,
     }
-
-
-def fetch_daily_aggregates(days: int = 14) -> list[dict]:
-    """일자별 평균 수익률 / 적중 종목 수 (차트용)"""
-    today = date.today()
-    start = (today - timedelta(days=days)).isoformat()
-
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT r.rec_date,
-                      COUNT(*) AS total,
-                      SUM(CASE WHEN COALESCE(
-                          (SELECT pt.return_pct FROM price_tracking pt
-                           WHERE pt.recommendation_id = r.id
-                           ORDER BY pt.track_date DESC LIMIT 1), -999) >= ?
-                          THEN 1 ELSE 0 END) AS hits,
-                      AVG(
-                          (SELECT pt.return_pct FROM price_tracking pt
-                           WHERE pt.recommendation_id = r.id
-                           ORDER BY pt.track_date DESC LIMIT 1)
-                      ) AS avg_return
-               FROM recommendations r
-               WHERE r.rec_date >= ?
-               GROUP BY r.rec_date
-               ORDER BY r.rec_date ASC""",
-            (HIT_THRESHOLD_PCT, start),
-        ).fetchall()
-
-    return [dict(r) for r in rows]
 
 
 def fetch_sector_performance(days: int = 30) -> list[dict]:
@@ -123,82 +84,75 @@ def fetch_sector_performance(days: int = 30) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def fetch_all_time_stats() -> dict:
-    """전체 누적 통계"""
-    with get_conn() as conn:
-        row = conn.execute(
-            """SELECT COUNT(*) AS total_recs,
-                      COUNT(DISTINCT rec_date) AS rec_days
-               FROM recommendations"""
-        ).fetchone()
-        acc = conn.execute(
-            """SELECT SUM(total_stocks) AS total,
-                      SUM(hit_count) AS hits,
-                      AVG(hit_rate_pct) AS avg_hit_rate,
-                      AVG(avg_return_pct) AS avg_return
-               FROM accuracy_results"""
-        ).fetchone()
+# ============== 차트 (월별 티어 분포 - 수량/비율 2단) ==============
 
-    return {
-        "total_recs": row["total_recs"] or 0,
-        "rec_days": row["rec_days"] or 0,
-        "matured_total": acc["total"] or 0,
-        "matured_hits": acc["hits"] or 0,
-        "all_hit_rate": acc["avg_hit_rate"] or 0.0,
-        "all_avg_return": acc["avg_return"] or 0.0,
-    }
+def render_monthly_tier_chart(monthly_stats: list[dict], output_path: str):
+    months_with_data = [m for m in monthly_stats if m["matured_count"] > 0]
 
-
-# ============== 차트 ==============
-
-def render_chart(daily: list[dict], output_path: str):
-    """일자별 평균수익률(위) + 적중 종목 수(아래) 2단 차트"""
-    if not daily:
-        # 데이터 없으면 안내 이미지
-        fig, ax = plt.subplots(figsize=(8, 3))
-        ax.text(0.5, 0.5, "No tracking data yet", ha="center", va="center", fontsize=14)
+    if not months_with_data:
+        # 만기 데이터 없으면 진행 중 상황 안내
+        fig, ax = plt.subplots(figsize=(8, 3.5))
+        in_progress = sum(m["in_progress_count"] for m in monthly_stats)
+        msg = (
+            f"No matured recommendations yet\n"
+            f"(currently tracking {in_progress} stocks)\n"
+            f"First evaluation in 14 days from recommendation date"
+        )
+        ax.text(0.5, 0.5, msg, ha="center", va="center", fontsize=12)
         ax.axis("off")
         fig.savefig(output_path, dpi=120, bbox_inches="tight")
         plt.close(fig)
         return
 
-    dates = [datetime.fromisoformat(d["rec_date"]).date() for d in daily]
-    avg_returns = [d["avg_return"] or 0 for d in daily]
-    hits = [d["hits"] or 0 for d in daily]
-    totals = [d["total"] or 0 for d in daily]
+    months = [m["month"] for m in months_with_data]
+    n_tiers = len(TIER_LABELS)
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 9))
 
-    # 패널 1: 평균 수익률
-    colors = ["#2ECC71" if r >= 0 else "#E74C3C" for r in avg_returns]
-    ax1.bar(dates, avg_returns, color=colors, width=0.7, edgecolor="white")
-    ax1.axhline(0, color="black", linewidth=0.6)
-    ax1.axhline(HIT_THRESHOLD_PCT, color="#3498DB", linewidth=0.8, linestyle="--",
-                label=f"Hit threshold ({HIT_THRESHOLD_PCT:.0f}%)")
-    ax1.set_ylabel("Avg return (%)")
-    ax1.set_title("Daily avg return")
-    ax1.legend(loc="upper left", fontsize=8)
+    bottoms_count = [0] * len(months)
+    bottoms_pct = [0] * len(months)
+
+    for tier_idx in range(n_tiers):
+        counts = [m["tier_counts"][tier_idx] for m in months_with_data]
+        totals = [m["matured_count"] for m in months_with_data]
+        pcts = [c / t * 100 if t else 0 for c, t in zip(counts, totals)]
+
+        ax1.bar(months, counts, bottom=bottoms_count,
+                color=TIER_COLORS[tier_idx], label=TIER_LABELS_EN[tier_idx],
+                edgecolor="white", linewidth=0.5, width=0.6)
+        ax2.bar(months, pcts, bottom=bottoms_pct,
+                color=TIER_COLORS[tier_idx], label=TIER_LABELS_EN[tier_idx],
+                edgecolor="white", linewidth=0.5, width=0.6)
+
+        bottoms_count = [b + c for b, c in zip(bottoms_count, counts)]
+        bottoms_pct = [b + p for b, p in zip(bottoms_pct, pcts)]
+
+    # 상단: 절대 수량
+    ax1.set_ylabel("Stocks (count)")
+    ax1.set_title("Monthly tier distribution (matured stocks)")
+    ax1.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=9, frameon=False)
     ax1.grid(axis="y", alpha=0.3)
 
-    # 패널 2: 적중 종목 수
-    miss_counts = [t - h for t, h in zip(totals, hits)]
-    ax2.bar(dates, hits, color="#2ECC71", width=0.7, label="Hit", edgecolor="white")
-    ax2.bar(dates, miss_counts, bottom=hits, color="#BDC3C7", width=0.7,
-            label="Miss", edgecolor="white")
-    ax2.set_ylabel("Stocks")
-    ax2.set_title(f"Daily hit count (≥{HIT_THRESHOLD_PCT:.0f}% gain)")
-    ax2.legend(loc="upper left", fontsize=8)
+    # 평균 수익률 텍스트 (각 막대 위)
+    for i, m in enumerate(months_with_data):
+        ax1.text(i, m["matured_count"] + 0.3,
+                 f"avg {m['avg_return']:+.1f}%",
+                 ha="center", fontsize=8, color="#333")
+
+    # 하단: 비율
+    ax2.set_ylabel("Stocks (%)")
+    ax2.set_xlabel("Month")
+    ax2.set_title("Monthly tier distribution (normalized)")
+    ax2.set_ylim(0, 100)
+    ax2.legend(loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=9, frameon=False)
     ax2.grid(axis="y", alpha=0.3)
 
-    # 날짜 포맷
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
-    fig.autofmt_xdate(rotation=45)
     fig.tight_layout()
     fig.savefig(output_path, dpi=120, bbox_inches="tight")
     plt.close(fig)
 
 
-# ============== 임베드 생성 ==============
+# ============== 임베드 ==============
 
 COLOR_BLUE = 0x3498DB
 COLOR_GREEN = 0x2ECC71
@@ -216,36 +170,52 @@ def _format_stock_line(it: dict) -> str:
     )
 
 
-def build_embeds(week: dict, all_time: dict, sectors: list[dict]) -> list[dict]:
-    color = COLOR_GREEN if week["avg_return"] >= 0 else COLOR_RED
-
-    # 1) 요약 임베드
-    summary = (
-        f"**기간**: {week['start_date']} ~ {week['end_date']} (지난 {week['period_days']}일)\n"
-        f"**추천 종목**: {week['total']}개 (추적 중 {week['tracked']}개)\n"
-        f"**적중**: {week['hit_count']}개 / {week['tracked']}개 "
-        f"= **{week['hit_rate']:.1f}%** (≥{HIT_THRESHOLD_PCT:.0f}% 수익 기준)\n"
-        f"**평균 수익률**: **{week['avg_return']:+.2f}%**\n\n"
-        f"━━━ 전체 누적 ━━━\n"
-        f"누적 추천 종목: {all_time['total_recs']}개 ({all_time['rec_days']}일치)\n"
-    )
-    if all_time["matured_total"]:
-        summary += (
-            f"만기 도달(2주 경과): {all_time['matured_hits']}/{all_time['matured_total']} 적중 "
-            f"= 평균 {all_time['all_hit_rate']:.1f}%\n"
-            f"평균 수익률: {all_time['all_avg_return']:+.2f}%"
+def _format_month_block(stats: dict) -> str:
+    if stats["matured_count"] == 0:
+        if stats["total_recs"] == 0:
+            return f"**{stats['month']}** — 추천 없음"
+        return (
+            f"**{stats['month']}** — 추천 {stats['total_recs']}개 "
+            f"(진행중 {stats['in_progress_count']}개, 만기 미도달)"
         )
+    lines = [
+        f"**{stats['month']}** — 만기 {stats['matured_count']}개"
+        + (f" / 진행중 {stats['in_progress_count']}" if stats["in_progress_count"] else "")
+    ]
+    for label, count in zip(TIER_LABELS, stats["tier_counts"]):
+        if count == 0:
+            continue
+        pct = count / stats["matured_count"] * 100
+        lines.append(f"  · {label:<10} {count}개 ({pct:.1f}%)")
+    lines.append(
+        f"  📈 평균 **{stats['avg_return']:+.2f}%** · "
+        f"승률 {stats['win_rate']:.0f}% · 강승(≥5%) {stats['strong_win_rate']:.0f}%"
+    )
+    return "\n".join(lines)
+
+
+def build_embeds(week: dict, current_month: dict, prev_month: dict | None,
+                 sectors: list[dict]) -> list[dict]:
+    # 색상: 현재 월 평균에 따라
+    if current_month["matured_count"] > 0:
+        color = COLOR_GREEN if current_month["avg_return"] >= 0 else COLOR_RED
     else:
-        summary += "만기 도달 추천 없음 (운영 14일 이후 표시)"
+        color = COLOR_BLUE
+
+    # 1) 월별 적중 분포 (메인)
+    parts = [_format_month_block(current_month)]
+    if prev_month:
+        parts.append("")
+        parts.append(_format_month_block(prev_month))
 
     main_embed = {
-        "title": "📊 주간 백테스트 리포트",
+        "title": "📊 월별 적중 분포 리포트",
         "color": color,
-        "description": summary[:4096],
+        "description": "\n".join(parts)[:4096],
         "image": {"url": "attachment://chart.png"},
     }
 
-    # 2) TOP/BOTTOM
+    # 2) 이번 주 TOP/BOTTOM + 섹터
     valid = [x for x in week["items"] if x["latest_return"] is not None]
     valid_sorted = sorted(valid, key=lambda x: x["latest_return"], reverse=True)
     top5 = valid_sorted[:5]
@@ -254,13 +224,13 @@ def build_embeds(week: dict, all_time: dict, sectors: list[dict]) -> list[dict]:
     perf_fields = []
     if top5:
         perf_fields.append({
-            "name": "🚀 TOP 5",
+            "name": f"🚀 이번 주 TOP 5 (지난 {week['period_days']}일)",
             "value": "\n".join(_format_stock_line(x) for x in top5)[:1024],
             "inline": False,
         })
     if bottom5:
         perf_fields.append({
-            "name": "📉 BOTTOM 5",
+            "name": "📉 이번 주 BOTTOM 5",
             "value": "\n".join(_format_stock_line(x) for x in bottom5)[:1024],
             "inline": False,
         })
@@ -272,7 +242,7 @@ def build_embeds(week: dict, all_time: dict, sectors: list[dict]) -> list[dict]:
                 f"{sign} **{s['sector']}** {s['avg_return']:+.2f}% ({s['total']}개)"
             )
         perf_fields.append({
-            "name": "🏷️ 섹터별 평균 수익률",
+            "name": "🏷️ 섹터별 평균 수익률 (30일)",
             "value": "\n".join(sector_lines)[:1024],
             "inline": False,
         })
@@ -288,6 +258,16 @@ def build_embeds(week: dict, all_time: dict, sectors: list[dict]) -> list[dict]:
 
 # ============== 메인 ==============
 
+def _prev_month_str(ym: str) -> str:
+    y, m = ym.split("-")
+    y, m = int(y), int(m)
+    m -= 1
+    if m == 0:
+        m = 12
+        y -= 1
+    return f"{y:04d}-{m:02d}"
+
+
 def run_weekly_report():
     logger.info("=== 주간 리포트 생성 시작 ===")
 
@@ -295,23 +275,31 @@ def run_weekly_report():
         logger.warning("DB 파일 없음 — 리포트 건너뜀")
         return
 
+    today = date.today()
+    cur_month = today.strftime("%Y-%m")
+    prev_month_ym = _prev_month_str(cur_month)
+
+    current_month = get_monthly_tier_stats(cur_month)
+    prev_month = get_monthly_tier_stats(prev_month_ym)
+    # 전월 데이터 없으면 표시 생략
+    if prev_month["total_recs"] == 0:
+        prev_month = None
+
+    monthly_all = get_all_monthly_stats(months_limit=12)
     week = fetch_period_stats(days=7)
-    daily = fetch_daily_aggregates(days=14)
     sectors = fetch_sector_performance(days=30)
-    all_time = fetch_all_time_stats()
 
     logger.info(
-        "지난 7일 — 추천 %d개, 추적 %d개, 적중 %d개 (%.1f%%), 평균 %+.2f%%",
-        week["total"], week["tracked"], week["hit_count"],
-        week["hit_rate"], week["avg_return"],
+        "%s — 만기 %d / 진행중 %d / 평균 %+.2f%% / 승률 %.0f%%",
+        cur_month, current_month["matured_count"], current_month["in_progress_count"],
+        current_month["avg_return"], current_month["win_rate"],
     )
 
-    # 차트 생성
     tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     tmp.close()
     try:
-        render_chart(daily, tmp.name)
-        embeds = build_embeds(week, all_time, sectors)
+        render_monthly_tier_chart(monthly_all, tmp.name)
+        embeds = build_embeds(week, current_month, prev_month, sectors)
         ok = post_with_file(embeds, tmp.name, "chart.png")
         logger.info("Discord 주간 리포트 전송 %s", "성공" if ok else "실패")
     finally:

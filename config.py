@@ -39,5 +39,8 @@ LOG_DIR = BASE_DIR / "logs"
 BRIEFING_HOUR = 6
 BRIEFING_MINUTE = 30
 TOP_N_STOCKS = 10
-TRACKING_DAYS = 14          # 2주 후 적중률 계산
-HIT_THRESHOLD_PCT = 3.0     # 3% 이상 상승 = 적중
+TRACKING_DAYS = 14          # 2주 후 평가
+HIT_THRESHOLD_PCT = 5.0     # 단순 적중 기준 (티어 +5%~+10% 경계)
+
+# 2주 후 수익률 평가 티어 (% 경계, 내림차순) — 8개 버킷
+TIER_BOUNDARIES = [30, 10, 5, 0, -5, -10, -30]
