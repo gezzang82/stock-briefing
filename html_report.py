@@ -73,6 +73,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td:last-child, th:last-child {{ text-align: right; }}
   td a {{ color: #2980b9; text-decoration: none; border-bottom: 1px dashed #b9d6e8; }}
   td a:hover {{ color: #1c5980; border-bottom-color: #1c5980; }}
+  .show-more-wrap {{ text-align: center; margin-top: 0.8rem; }}
+  .show-more-btn {{
+    background: white; border: 1px solid var(--border); color: var(--text);
+    padding: 0.5rem 1.4rem; border-radius: 8px; cursor: pointer;
+    font-size: 0.85rem; font-family: inherit;
+  }}
+  .show-more-btn:hover {{ background: #f0f3f5; border-color: #d0d7de; }}
   .empty {{
     color: var(--muted); padding: 2rem; text-align: center;
     font-size: 0.9rem;
@@ -98,6 +105,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 {body}
 
 <script>
+function showMore(btn, step) {{
+  var wrap = btn.parentElement;
+  var tbody = wrap.previousElementSibling.querySelector('tbody');
+  var hidden = tbody.querySelectorAll('tr[data-hidden="1"]');
+  var shown = 0;
+  for (var i = 0; i < hidden.length && shown < step; i++) {{
+    hidden[i].style.display = '';
+    hidden[i].removeAttribute('data-hidden');
+    shown++;
+  }}
+  var remaining = parseInt(btn.dataset.remaining) - shown;
+  if (remaining <= 0) {{
+    wrap.style.display = 'none';
+  }} else {{
+    btn.dataset.remaining = remaining;
+    btn.textContent = '더보기 (' + remaining + '개 남음)';
+  }}
+}}
 {scripts}
 </script>
 </body>
@@ -110,19 +135,25 @@ def _naver_url(code: str) -> str:
     return f"https://m.stock.naver.com/domestic/stock/{code}/total"
 
 
-def _stock_table(items: list[dict], title: str, limit: int = 20) -> str:
+def _stock_table(items: list[dict], title: str,
+                 initial_visible: int = 20, expand_step: int = 10) -> str:
+    """수익률 내림차순. 처음 initial_visible개 노출, 나머지는 더보기 버튼으로 펼침."""
     valid = [x for x in items if x.get("latest_return") is not None]
     if not valid:
         return ""
     valid.sort(key=lambda x: x["latest_return"], reverse=True)
+
+    total = len(valid)
     rows = []
-    for it in valid[:limit]:
+    for i, it in enumerate(valid):
         ret = it["latest_return"]
         cls = "up" if ret >= 0 else "down"
         sign = "▲" if ret >= 0 else "▼"
         url = _naver_url(it["stock_code"])
+        # initial_visible 이후 행은 숨김
+        hidden_attr = ' style="display:none" data-hidden="1"' if i >= initial_visible else ""
         rows.append(
-            f"<tr>"
+            f"<tr{hidden_attr}>"
             f"<td>{it['rec_date']}</td>"
             f'<td><a href="{url}" target="_blank" rel="noopener">{it["stock_code"]}</a></td>'
             f'<td><a href="{url}" target="_blank" rel="noopener">{it["stock_name"]}</a></td>'
@@ -130,16 +161,30 @@ def _stock_table(items: list[dict], title: str, limit: int = 20) -> str:
             f'<td class="{cls}">{sign}{abs(ret):.2f}%</td>'
             f"</tr>"
         )
+
+    hidden_count = max(0, total - initial_visible)
+    button_html = ""
+    if hidden_count > 0:
+        button_html = (
+            f'<div class="show-more-wrap">'
+            f'<button class="show-more-btn" onclick="showMore(this, {expand_step})" '
+            f'data-remaining="{hidden_count}">'
+            f"더보기 ({hidden_count}개 남음)</button>"
+            f"</div>"
+        )
+
     return (
-        f"<h3>{title}</h3>"
+        f"<h3>{title} <span style='font-size:0.8rem;color:var(--muted);font-weight:normal'>"
+        f"(총 {total}개)</span></h3>"
         f'<p style="font-size:0.8rem;color:var(--muted);margin:0 0 0.3rem">'
-        f"종목명/코드를 누르면 네이버 증권에서 열립니다</p>"
+        f"수익률 높은 순 · 종목명/코드를 누르면 네이버 증권에서 열립니다</p>"
         f'<div class="table-wrap"><table>'
         f"<thead><tr>"
         f"<th>추천일</th><th>코드</th><th>종목명</th><th>섹터</th><th>수익률</th>"
         f"</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
+        f"{button_html}"
     )
 
 
