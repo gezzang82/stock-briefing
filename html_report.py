@@ -71,6 +71,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }}
   th {{ background: #f8f9fa; font-weight: 600; font-size: 0.8rem; color: var(--muted); }}
   td:last-child, th:last-child {{ text-align: right; }}
+  td a {{ color: #2980b9; text-decoration: none; border-bottom: 1px dashed #b9d6e8; }}
+  td a:hover {{ color: #1c5980; border-bottom-color: #1c5980; }}
   .empty {{
     color: var(--muted); padding: 2rem; text-align: center;
     font-size: 0.9rem;
@@ -103,6 +105,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+def _naver_url(code: str) -> str:
+    """네이버 증권 모바일 종목 페이지"""
+    return f"https://m.stock.naver.com/domestic/stock/{code}/total"
+
+
 def _stock_table(items: list[dict], title: str, limit: int = 20) -> str:
     valid = [x for x in items if x.get("latest_return") is not None]
     if not valid:
@@ -113,17 +120,20 @@ def _stock_table(items: list[dict], title: str, limit: int = 20) -> str:
         ret = it["latest_return"]
         cls = "up" if ret >= 0 else "down"
         sign = "▲" if ret >= 0 else "▼"
+        url = _naver_url(it["stock_code"])
         rows.append(
             f"<tr>"
             f"<td>{it['rec_date']}</td>"
-            f"<td>{it['stock_code']}</td>"
-            f"<td>{it['stock_name']}</td>"
+            f'<td><a href="{url}" target="_blank" rel="noopener">{it["stock_code"]}</a></td>'
+            f'<td><a href="{url}" target="_blank" rel="noopener">{it["stock_name"]}</a></td>'
             f"<td>{it.get('sector') or '-'}</td>"
             f'<td class="{cls}">{sign}{abs(ret):.2f}%</td>'
             f"</tr>"
         )
     return (
         f"<h3>{title}</h3>"
+        f'<p style="font-size:0.8rem;color:var(--muted);margin:0 0 0.3rem">'
+        f"종목명/코드를 누르면 네이버 증권에서 열립니다</p>"
         f'<div class="table-wrap"><table>'
         f"<thead><tr>"
         f"<th>추천일</th><th>코드</th><th>종목명</th><th>섹터</th><th>수익률</th>"

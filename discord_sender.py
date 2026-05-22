@@ -111,12 +111,14 @@ def send_briefing(
         sign = "▲" if chg >= 0 else "▼"
         mark = risk_emoji.get(rec.get("risk_level", "중간"), "🟡")
 
+        naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
         name = f"{rec['rank']}위. [{code}] {rec['name']} {mark}"
         value = (
             f"{price_label} **{price:,.0f}원** ({sign}{abs(chg):.1f}%)\n"
             f"섹터: {rec.get('sector', '-')} · 목표 +{rec.get('target_return', 0):.1f}%\n"
             f"💡 {rec.get('key_catalyst', '')}\n"
-            f"_{rec.get('reason', '')}_"
+            f"_{rec.get('reason', '')}_\n"
+            f"🔗 [네이버 증권에서 보기]({naver_url})"
         )
         fields.append({"name": name[:256], "value": value[:1024], "inline": False})
 
