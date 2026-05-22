@@ -36,6 +36,26 @@ def _post(payload: dict) -> bool:
         return False
 
 
+def post_with_file(embeds: list[dict], file_path: str, filename: str = "chart.png") -> bool:
+    """임베드 + 파일(이미지) 첨부 전송. 임베드에서 attachment://filename 으로 참조 가능"""
+    import json as _json
+    if not DISCORD_WEBHOOK_URL:
+        logger.info("DISCORD_WEBHOOK_URL 미설정 — 전송 건너뜀")
+        return False
+    try:
+        with open(file_path, "rb") as fp:
+            files = {"file": (filename, fp.read(), "image/png")}
+        data = {"payload_json": _json.dumps({"embeds": embeds})}
+        resp = requests.post(DISCORD_WEBHOOK_URL, data=data, files=files, timeout=15)
+        if resp.status_code in (200, 204):
+            return True
+        logger.error("Discord 파일 전송 실패: %s %s", resp.status_code, resp.text[:200])
+        return False
+    except Exception as e:
+        logger.error("Discord 파일 요청 예외: %s", e)
+        return False
+
+
 def send_text(text: str) -> bool:
     """단순 텍스트 메시지 (최대 2000자)"""
     return _post({"content": text[:2000]})

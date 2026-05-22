@@ -1,0 +1,49 @@
+name: 주간 리포트
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # 매주 일요일 09:00 KST (UTC 일요일 00:00)
+  workflow_dispatch:     # 수동 실행 가능
+
+concurrency:
+  group: stock-briefing  # 메인 브리핑과 동일 그룹 — DB/토큰 충돌 방지
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+
+      - name: DB 캐시 복원 (읽기 전용)
+        uses: actions/cache@v4
+        with:
+          path: |
+            stock_briefing.db
+            .kis_token_cache
+          key: stock-state-report-${{ github.run_id }}
+          restore-keys: |
+            stock-state-
+            stock-db-
+
+      - name: 주간 리포트 실행
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python weekly_report.py
+
+      - name: 실행 결과 요약
+        if: always()
+        run: |
+          echo "## 주간 리포트 실행" >> $GITHUB_STEP_SUMMARY
+          echo "- 시각 (KST): $(TZ='Asia/Seoul' date)" >> $GITHUB_STEP_SUMMARY
