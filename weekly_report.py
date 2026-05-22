@@ -35,6 +35,7 @@ def fetch_period_items(days: int = 7) -> list[dict]:
         rows = conn.execute(
             """SELECT r.id, r.rec_date, r.rank, r.stock_code, r.stock_name,
                       r.sector, r.entry_price, r.risk_level,
+                      r.mfe_pct, r.mae_pct, r.final_return_pct,
                       (SELECT pt.return_pct FROM price_tracking pt
                        WHERE pt.recommendation_id = r.id
                        ORDER BY pt.track_date DESC LIMIT 1) AS latest_return

@@ -76,6 +76,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td a:hover {{ color: #1c5980; }}
   td a.stock-cell .stock-name {{ border-bottom: 1px dashed #b9d6e8; }}
   td a.stock-cell:hover .stock-name {{ border-bottom-color: #1c5980; }}
+  td.mfe-mae {{ font-size: 0.8rem; white-space: nowrap; }}
   .stock-logo, .stock-logo-fb {{
     display: inline-block; width: 22px; height: 22px;
     margin-right: 6px; vertical-align: middle;
@@ -198,6 +199,15 @@ def _stock_table(items: list[dict], title: str,
         # YYYY-MM-DD → YY-MM-DD (세기 부분 생략)
         date_short = it["rec_date"][2:] if len(it["rec_date"]) == 10 else it["rec_date"]
         logo = _logo_html(it["stock_code"], it["stock_name"])
+        # MFE/MAE 표시 (있을 때만)
+        mfe = it.get("mfe_pct")
+        mae = it.get("mae_pct")
+        mfe_mae_cell = "—"
+        if mfe is not None and mae is not None:
+            mfe_mae_cell = (
+                f'<span class="up">▲{mfe:.1f}%</span> / '
+                f'<span class="down">▼{abs(mae):.1f}%</span>'
+            )
         rows.append(
             f"<tr{hidden_attr}>"
             f"<td>{date_short}</td>"
@@ -207,6 +217,7 @@ def _stock_table(items: list[dict], title: str,
             f"</td>"
             f"<td>{it.get('sector') or '-'}</td>"
             f'<td class="{cls}">{sign}{abs(ret):.2f}%</td>'
+            f'<td class="mfe-mae">{mfe_mae_cell}</td>'
             f"</tr>"
         )
 
@@ -225,10 +236,12 @@ def _stock_table(items: list[dict], title: str,
         f"<h3>{title} <span style='font-size:0.8rem;color:var(--muted);font-weight:normal'>"
         f"(총 {total}개)</span></h3>"
         f'<p style="font-size:0.8rem;color:var(--muted);margin:0 0 0.3rem">'
-        f"수익률 높은 순 · 종목명을 누르면 네이버 증권에서 열립니다</p>"
+        f"수익률 높은 순 · 종목명을 누르면 네이버 증권에서 열립니다 · "
+        f"<span class='up'>▲</span> = MFE 최고상승 / <span class='down'>▼</span> = MAE 최대하락</p>"
         f'<div class="table-wrap"><table>'
         f"<thead><tr>"
-        f"<th>추천일</th><th>종목명</th><th>섹터</th><th>수익률</th>"
+        f"<th>추천일</th><th>종목명</th><th>섹터</th><th>현재 수익률</th>"
+        f"<th>변동폭 (▲/▼)</th>"
         f"</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
@@ -273,6 +286,11 @@ def _month_card(stats: dict) -> tuple[str, dict | None]:
             f'<div class="stat">승률 <strong>{stats["win_rate"]:.0f}%</strong></div>',
             f'<div class="stat">강승(≥5%) <strong>{stats["strong_win_rate"]:.0f}%</strong></div>',
         ]
+        if stats.get("avg_mfe", 0) or stats.get("avg_mae", 0):
+            badges += [
+                f'<div class="stat">평균 MFE <strong class="up">▲{stats["avg_mfe"]:.2f}%</strong></div>',
+                f'<div class="stat">평균 MAE <strong class="down">▼{abs(stats["avg_mae"]):.2f}%</strong></div>',
+            ]
     if stats["in_progress_count"]:
         badges.append(
             f'<div class="stat">진행 중 {stats["in_progress_count"]}개</div>'

@@ -63,6 +63,71 @@ def record_prices_for_active_recs():
     for row in rows:
         record_today_prices(row["rec_date"])
 
+    # 가격 기록 후 모든 추천의 MFE/MAE/Final 재계산
+    update_all_outcomes()
+
+
+def _compute_outcome(rec_id: int) -> dict | None:
+    """
+    특정 추천에 대해 price_tracking 전체 행을 훑어 MFE/MAE/Final 산출.
+    Returns: {mfe_pct, mae_pct, final_return_pct, mfe_date, mae_date}
+    """
+    from database import get_conn
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT track_date, return_pct
+               FROM price_tracking
+               WHERE recommendation_id = ? AND return_pct IS NOT NULL
+               ORDER BY track_date""",
+            (rec_id,),
+        ).fetchall()
+    if not rows:
+        return None
+
+    mfe_row = max(rows, key=lambda r: r["return_pct"])
+    mae_row = min(rows, key=lambda r: r["return_pct"])
+    final_row = rows[-1]
+    return {
+        "mfe_pct": mfe_row["return_pct"],
+        "mae_pct": mae_row["return_pct"],
+        "final_return_pct": final_row["return_pct"],
+        "mfe_date": mfe_row["track_date"],
+        "mae_date": mae_row["track_date"],
+    }
+
+
+def update_all_outcomes():
+    """
+    추적 데이터가 있는 모든 추천에 대해 MFE/MAE/Final 재계산 후 DB 저장.
+    매일 가격 기록 후 호출 (만기 미도달 종목도 진행 중 값을 반영).
+    """
+    from database import get_conn
+    with get_conn() as conn:
+        rec_ids = [r["id"] for r in conn.execute(
+            "SELECT DISTINCT recommendation_id FROM price_tracking"
+        ).fetchall()]
+
+    if not rec_ids:
+        return
+
+    updated = 0
+    with get_conn() as conn:
+        for rec_id in rec_ids:
+            outcome = _compute_outcome(rec_id)
+            if not outcome:
+                continue
+            conn.execute(
+                """UPDATE recommendations
+                   SET mfe_pct=?, mae_pct=?, final_return_pct=?,
+                       mfe_date=?, mae_date=?,
+                       outcome_updated_at=datetime('now','localtime')
+                   WHERE id=?""",
+                (outcome["mfe_pct"], outcome["mae_pct"], outcome["final_return_pct"],
+                 outcome["mfe_date"], outcome["mae_date"], rec_id),
+            )
+            updated += 1
+    logger.info("MFE/MAE/Final 갱신: %d개 추천", updated)
+
 
 def calculate_accuracy(rec_date: str):
     """특정 추천일의 2주 후 적중률 계산"""
@@ -179,7 +244,7 @@ def get_monthly_tier_stats(year_month: str | None = None) -> dict:
     from database import get_conn
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT r.id, r.rec_date,
+            """SELECT r.id, r.rec_date, r.mfe_pct, r.mae_pct, r.final_return_pct,
                       (SELECT pt.return_pct FROM price_tracking pt
                        WHERE pt.recommendation_id = r.id
                        ORDER BY pt.track_date DESC LIMIT 1) AS latest_return
@@ -190,6 +255,8 @@ def get_monthly_tier_stats(year_month: str | None = None) -> dict:
         ).fetchall()
 
     matured_returns: list[float] = []
+    matured_mfe: list[float] = []
+    matured_mae: list[float] = []
     in_progress = 0
     pending = 0
 
@@ -200,7 +267,13 @@ def get_monthly_tier_stats(year_month: str | None = None) -> dict:
             pending += 1
             continue
         if days_passed >= TRACKING_DAYS:
-            matured_returns.append(row["latest_return"])
+            # 만기 도달 — final_return_pct 우선, 없으면 latest
+            ret = row["final_return_pct"] if row["final_return_pct"] is not None else row["latest_return"]
+            matured_returns.append(ret)
+            if row["mfe_pct"] is not None:
+                matured_mfe.append(row["mfe_pct"])
+            if row["mae_pct"] is not None:
+                matured_mae.append(row["mae_pct"])
         else:
             in_progress += 1
 
@@ -222,6 +295,9 @@ def get_monthly_tier_stats(year_month: str | None = None) -> dict:
         "strong_win_rate": sum(1 for r in matured_returns if r >= 5) / n * 100 if n else 0.0,
         "best": max(matured_returns) if matured_returns else 0.0,
         "worst": min(matured_returns) if matured_returns else 0.0,
+        # MFE/MAE 평균 (만기 도달 종목들)
+        "avg_mfe": sum(matured_mfe) / len(matured_mfe) if matured_mfe else 0.0,
+        "avg_mae": sum(matured_mae) / len(matured_mae) if matured_mae else 0.0,
     }
 
 

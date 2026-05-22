@@ -20,7 +20,14 @@ CREATE TABLE IF NOT EXISTS recommendations (
     reason TEXT,
     key_catalyst TEXT,
     market_summary TEXT,
-    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    -- Outcome (추천일~만기 14일 사이의 가격 추이 결과)
+    mfe_pct REAL,                    -- 최고 상승률 (Max Favorable Excursion)
+    mae_pct REAL,                    -- 최대 하락률 (Max Adverse Excursion)
+    final_return_pct REAL,           -- 만기일 시점 최종 수익률
+    mfe_date TEXT,                   -- MFE 달성일
+    mae_date TEXT,                   -- MAE 발생일
+    outcome_updated_at TEXT          -- outcome 마지막 계산 시각
 );
 
 CREATE TABLE IF NOT EXISTS price_tracking (
@@ -70,7 +77,25 @@ def get_conn():
 def init_db():
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
     logger.info("DB 초기화 완료: %s", DB_PATH)
+
+
+def _migrate(conn):
+    """기존 DB에 새 컬럼이 없으면 ALTER TABLE로 추가 (idempotent)"""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(recommendations)").fetchall()}
+    new_cols = [
+        ("mfe_pct", "REAL"),
+        ("mae_pct", "REAL"),
+        ("final_return_pct", "REAL"),
+        ("mfe_date", "TEXT"),
+        ("mae_date", "TEXT"),
+        ("outcome_updated_at", "TEXT"),
+    ]
+    for col, col_type in new_cols:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE recommendations ADD COLUMN {col} {col_type}")
+            logger.info("스키마 마이그레이션: recommendations.%s 추가", col)
 
 
 def save_recommendations(rec_date: str, recommendations: list[dict], market_summary: str):
