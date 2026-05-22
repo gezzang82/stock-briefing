@@ -76,7 +76,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td a:hover {{ color: #1c5980; }}
   td a.stock-cell .stock-name {{ border-bottom: 1px dashed #b9d6e8; }}
   td a.stock-cell:hover .stock-name {{ border-bottom-color: #1c5980; }}
-  td.mfe-mae {{ font-size: 0.8rem; white-space: nowrap; }}
+  td.mfe-mae {{ font-size: 0.78rem; white-space: nowrap; line-height: 1.35; }}
+  td.mfe-mae .row {{ display: block; }}
+  td.stock-col {{ padding-top: 6px; padding-bottom: 6px; }}
+  .sector-tag {{
+    display: inline-block; font-size: 0.7rem;
+    color: white; padding: 1px 8px; border-radius: 10px;
+    font-weight: 500; line-height: 1.4;
+    margin-bottom: 4px;
+  }}
+  td.amount-col {{ vertical-align: middle; font-weight: 600; }}
   .stock-logo, .stock-logo-fb {{
     display: inline-block; width: 22px; height: 22px;
     margin-right: 6px; vertical-align: middle;
@@ -162,6 +171,38 @@ def _naver_url(code: str) -> str:
 # 종목코드별 fallback 아바타 색상 (코드 해시 기반 6종)
 _FB_COLORS = ["#3498db", "#9b59b6", "#16a085", "#e67e22", "#e74c3c", "#34495e"]
 
+# 섹터별 태그 컬러 (substring 매칭, 모르는 섹터는 hash로 fallback)
+_SECTOR_COLORS = {
+    "반도체": "#3498db", "IT": "#9b59b6",  "AI": "#8e44ad",
+    "2차전지": "#16a085", "배터리": "#16a085",
+    "바이오": "#e74c3c", "제약": "#c0392b", "헬스": "#e67e22",
+    "자동차": "#34495e", "운송": "#34495e",
+    "화학": "#27ae60", "에너지": "#d35400",
+    "금융": "#f39c12", "증권": "#f39c12", "보험": "#d4a017",
+    "통신": "#1abc9c", "미디어": "#2980b9", "엔터": "#e91e63",
+    "건설": "#7f8c8d", "유통": "#c0392b", "음식료": "#16a085",
+    "조선": "#2c3e50", "철강": "#7f8c8d", "방산": "#34495e",
+    "소비재": "#9c27b0", "제조": "#607d8b", "소재": "#795548",
+    "원자력": "#ff5722", "전력": "#ffc107",
+}
+_SECTOR_FB_PALETTE = ["#5dade2", "#af7ac5", "#48c9b0", "#f5b041", "#ec7063", "#5d6d7e"]
+
+
+def _sector_color(sector: str | None) -> str:
+    if not sector or sector == "-":
+        return "#95a5a6"
+    for keyword, color in _SECTOR_COLORS.items():
+        if keyword in sector:
+            return color
+    return _SECTOR_FB_PALETTE[sum(ord(c) for c in sector) % len(_SECTOR_FB_PALETTE)]
+
+
+def _sector_tag(sector: str | None) -> str:
+    if not sector or sector == "-":
+        return '<span class="sector-tag" style="background:#bdc3c7">-</span>'
+    color = _sector_color(sector)
+    return f'<span class="sector-tag" style="background:{color}">{sector}</span>'
+
 
 def _logo_html(code: str, name: str) -> str:
     """
@@ -199,24 +240,26 @@ def _stock_table(items: list[dict], title: str,
         # YYYY-MM-DD → YY-MM-DD (세기 부분 생략)
         date_short = it["rec_date"][2:] if len(it["rec_date"]) == 10 else it["rec_date"]
         logo = _logo_html(it["stock_code"], it["stock_name"])
-        # MFE/MAE 표시 (있을 때만)
+        sector_tag = _sector_tag(it.get("sector"))
+        # 변동폭 2줄
         mfe = it.get("mfe_pct")
         mae = it.get("mae_pct")
-        mfe_mae_cell = "—"
         if mfe is not None and mae is not None:
             mfe_mae_cell = (
-                f'<span class="up">▲{mfe:.1f}%</span> / '
-                f'<span class="down">▼{abs(mae):.1f}%</span>'
+                f'<span class="row up">▲{mfe:.1f}%</span>'
+                f'<span class="row down">▼{abs(mae):.1f}%</span>'
             )
+        else:
+            mfe_mae_cell = "—"
         rows.append(
             f"<tr{hidden_attr}>"
             f"<td>{date_short}</td>"
-            f"<td>"
+            f'<td class="stock-col">'
+            f'<div>{sector_tag}</div>'
             f'<a href="{url}" target="_blank" rel="noopener" class="stock-cell">'
             f'{logo}<span class="stock-name">{it["stock_name"]}</span></a>'
             f"</td>"
-            f"<td>{it.get('sector') or '-'}</td>"
-            f'<td class="{cls}">{sign}{abs(ret):.2f}%</td>'
+            f'<td class="amount-col {cls}">{sign}{abs(ret):.2f}%</td>'
             f'<td class="mfe-mae">{mfe_mae_cell}</td>'
             f"</tr>"
         )
@@ -237,11 +280,11 @@ def _stock_table(items: list[dict], title: str,
         f"(총 {total}개)</span></h3>"
         f'<p style="font-size:0.8rem;color:var(--muted);margin:0 0 0.3rem">'
         f"수익률 높은 순 · 종목명을 누르면 네이버 증권에서 열립니다 · "
-        f"<span class='up'>▲</span> = MFE 최고상승 / <span class='down'>▼</span> = MAE 최대하락</p>"
+        f"<span class='up'>▲</span>최고상승(MFE) / <span class='down'>▼</span>최대하락(MAE)</p>"
         f'<div class="table-wrap"><table>'
         f"<thead><tr>"
-        f"<th>추천일</th><th>종목명</th><th>섹터</th><th>현재 수익률</th>"
-        f"<th>변동폭 (▲/▼)</th>"
+        f"<th>추천일</th><th>종목</th>"
+        f"<th>현재 수익률</th><th>변동폭</th>"
         f"</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
