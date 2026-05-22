@@ -71,8 +71,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }}
   th {{ background: #f8f9fa; font-weight: 600; font-size: 0.8rem; color: var(--muted); }}
   td:last-child, th:last-child {{ text-align: right; }}
-  td a {{ color: #2980b9; text-decoration: none; border-bottom: 1px dashed #b9d6e8; }}
-  td a:hover {{ color: #1c5980; border-bottom-color: #1c5980; }}
+  td a {{ color: #2980b9; text-decoration: none; }}
+  td a:not(.stock-cell) {{ border-bottom: 1px dashed #b9d6e8; }}
+  td a:hover {{ color: #1c5980; }}
+  td a.stock-cell .stock-name {{ border-bottom: 1px dashed #b9d6e8; }}
+  td a.stock-cell:hover .stock-name {{ border-bottom-color: #1c5980; }}
+  .stock-logo, .stock-logo-fb {{
+    display: inline-block; width: 22px; height: 22px;
+    margin-right: 6px; vertical-align: middle;
+    border-radius: 50%; overflow: hidden;
+    flex-shrink: 0;
+  }}
+  .stock-logo {{ background: white; border: 1px solid var(--border); }}
+  .stock-logo img {{ width: 100%; height: 100%; object-fit: contain; display: block; }}
+  .stock-logo-fb {{
+    color: white; font-size: 11px; font-weight: 700;
+    text-align: center; line-height: 22px;
+  }}
+  td .stock-cell {{ display: inline-flex; align-items: center; }}
   .show-more-wrap {{ text-align: center; margin-top: 0.8rem; }}
   .show-more-btn {{
     background: white; border: 1px solid var(--border); color: var(--text);
@@ -105,6 +121,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 {body}
 
 <script>
+function logoFail(img) {{
+  var span = document.createElement('span');
+  span.className = 'stock-logo-fb';
+  span.style.background = img.dataset.bg;
+  span.textContent = img.dataset.letter;
+  img.parentElement.replaceChild(span, img);
+}}
 function showMore(btn, step) {{
   var wrap = btn.parentElement;
   var tbody = wrap.previousElementSibling.querySelector('tbody');
@@ -135,6 +158,26 @@ def _naver_url(code: str) -> str:
     return f"https://m.stock.naver.com/domestic/stock/{code}/total"
 
 
+# 종목코드별 fallback 아바타 색상 (코드 해시 기반 6종)
+_FB_COLORS = ["#3498db", "#9b59b6", "#16a085", "#e67e22", "#e74c3c", "#34495e"]
+
+
+def _logo_html(code: str, name: str) -> str:
+    """
+    네이버 공식 종목 로고 img + onerror 시 첫글자 컬러 아바타로 교체.
+    네이버 URL: ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock{code}.png
+    """
+    logo_url = f"https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock{code}.png"
+    first = (name[0] if name else "?").replace('"', "")
+    bg = _FB_COLORS[sum(ord(c) for c in code) % len(_FB_COLORS)]
+    return (
+        f'<span class="stock-logo">'
+        f'<img src="{logo_url}" alt="" onerror="logoFail(this)" '
+        f'data-bg="{bg}" data-letter="{first}">'
+        f"</span>"
+    )
+
+
 def _stock_table(items: list[dict], title: str,
                  initial_visible: int = 20, expand_step: int = 10) -> str:
     """수익률 내림차순. 처음 initial_visible개 노출, 나머지는 더보기 버튼으로 펼침."""
@@ -152,10 +195,16 @@ def _stock_table(items: list[dict], title: str,
         url = _naver_url(it["stock_code"])
         # initial_visible 이후 행은 숨김
         hidden_attr = ' style="display:none" data-hidden="1"' if i >= initial_visible else ""
+        # YYYY-MM-DD → YY-MM-DD (세기 부분 생략)
+        date_short = it["rec_date"][2:] if len(it["rec_date"]) == 10 else it["rec_date"]
+        logo = _logo_html(it["stock_code"], it["stock_name"])
         rows.append(
             f"<tr{hidden_attr}>"
-            f"<td>{it['rec_date']}</td>"
-            f'<td><a href="{url}" target="_blank" rel="noopener">{it["stock_name"]}</a></td>'
+            f"<td>{date_short}</td>"
+            f"<td>"
+            f'<a href="{url}" target="_blank" rel="noopener" class="stock-cell">'
+            f'{logo}<span class="stock-name">{it["stock_name"]}</span></a>'
+            f"</td>"
             f"<td>{it.get('sector') or '-'}</td>"
             f'<td class="{cls}">{sign}{abs(ret):.2f}%</td>'
             f"</tr>"
