@@ -87,3 +87,29 @@ jobs:
             tail -30 logs/briefing.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: 실패 시 Discord 알림
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          KST_TIME=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S')
+          LAST_LOG=""
+          if [ -f logs/briefing.log ]; then
+            LAST_LOG=$(tail -8 logs/briefing.log | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/"/\\"/g')
+          fi
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"🚨 주식 브리핑 워크플로우 실패\",
+                \"color\": 15158332,
+                \"fields\": [
+                  {\"name\": \"시각 (KST)\", \"value\": \"$KST_TIME\", \"inline\": true},
+                  {\"name\": \"트리거\", \"value\": \"${{ github.event_name }}\", \"inline\": true},
+                  {\"name\": \"마지막 로그\", \"value\": \"\`\`\`${LAST_LOG:-(로그 없음)}\`\`\`\"}
+                ],
+                \"url\": \"$RUN_URL\"
+              }]
+            }" \
+            "$DISCORD_WEBHOOK_URL" || true
