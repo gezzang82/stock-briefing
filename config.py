@@ -26,8 +26,8 @@ KAKAO_REFRESH_TOKEN = os.getenv("KAKAO_REFRESH_TOKEN", "")
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
 
-# Anthropic
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+# OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # 시스템 설정
 BASE_DIR = Path(__file__).parent

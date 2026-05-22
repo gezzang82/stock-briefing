@@ -1,14 +1,14 @@
 """
-Claude AI를 이용한 주식 분석 및 추천 종목 선정
+OpenAI를 이용한 주식 분석 및 추천 종목 선정
 """
 import json
 import logging
 import re
 from datetime import date
 
-import anthropic
+from openai import OpenAI
 
-from config import ANTHROPIC_API_KEY, TOP_N_STOCKS
+from config import OPENAI_API_KEY, TOP_N_STOCKS
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +54,11 @@ KOSDAQ: {kosdaq}
 
 def _parse_ai_response(text: str) -> dict:
     text = text.strip()
-    # 마크다운 코드블록 제거
     text = re.sub(r"```(?:json)?\s*", "", text).strip()
     text = text.rstrip("`").strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # JSON 블록만 추출 시도
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
             return json.loads(match.group())
@@ -72,7 +70,7 @@ def analyze_and_recommend(news_text: str, kospi: str, kosdaq: str) -> dict:
     뉴스와 시장 지표를 분석하여 추천 종목 반환.
     반환값: {"market_summary": ..., "key_themes": [...], "risk_factors": ..., "recommendations": [...]}
     """
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = OpenAI(api_key=OPENAI_API_KEY)
 
     prompt = ANALYSIS_PROMPT.format(
         n=TOP_N_STOCKS,
@@ -83,15 +81,19 @@ def analyze_and_recommend(news_text: str, kospi: str, kosdaq: str) -> dict:
     )
 
     logger.info("AI 분석 시작...")
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
         max_tokens=4096,
-        system="당신은 한국 주식 전문 애널리스트입니다. 항상 유효한 JSON만 반환합니다.",
-        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": "당신은 한국 주식 전문 애널리스트입니다. 항상 유효한 JSON만 반환합니다."},
+            {"role": "user", "content": prompt},
+        ],
     )
 
-    response_text = message.content[0].text
-    logger.info("AI 응답 수신 (tokens: %d)", message.usage.input_tokens + message.usage.output_tokens)
+    response_text = response.choices[0].message.content
+    usage = response.usage
+    logger.info("AI 응답 수신 (tokens: %d)", usage.prompt_tokens + usage.completion_tokens)
 
     try:
         result = _parse_ai_response(response_text)
