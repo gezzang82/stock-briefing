@@ -113,6 +113,13 @@ class KISClient:
                 "low": float(output.get("stck_lwpr", 0)),
                 "per": output.get("per", ""),
                 "pbr": output.get("pbr", ""),
+                # 거래 가능 여부 판단용 상태 필드
+                "iscd_stat_cls_code": output.get("iscd_stat_cls_code", "00"),  # 00=정상
+                "temp_stop_yn": output.get("temp_stop_yn", "N"),
+                "mang_issu_cls_code": output.get("mang_issu_cls_code", "N"),
+                "sltr_yn": output.get("sltr_yn", "N"),
+                "mrkt_warn_cls_code": output.get("mrkt_warn_cls_code", "00"),
+                "rprs_mrkt_kor_name": output.get("rprs_mrkt_kor_name", ""),
             }
         except Exception as e:
             logger.error("주가 조회 오류 [%s]: %s", code, e)

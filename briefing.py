@@ -21,79 +21,161 @@ def _format_index(name: str, data: dict | None) -> str:
     return f"{name} {data['current']:,.2f} ({sign}{abs(data['change_pct']):.2f}%)"
 
 
-def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], dict[str, dict]]:
-    """
-    AI 추천 종목을 KIS API로 검증:
-    - 중복 코드 제거 (상위 랭크 유지)
-    - KIS에서 인식 못 하는 코드 드롭
-    - AI가 준 이름을 KIS 실제 종목명으로 덮어쓰기 (hallucination 방지)
-    - 1부터 재정렬
+# ============== 검증 헬퍼 ==============
 
-    Returns: (정제된 추천 목록, KIS 가격 데이터)
+# KIS iscd_stat_cls_code 비정상 (51~59 = 관리/거래정지/정리매매 류)
+_BAD_STATUS_CODES = {"51", "52", "53", "54", "55", "56", "57", "58", "59"}
+
+ETF_BRAND_PREFIXES = (
+    "KODEX ", "TIGER ", "ARIRANG ", "KBSTAR ", "HANARO ", "KOSEF ",
+    "KINDEX ", "KIWOOM ", "ACE ", "SOL ", "RISE ", "WOORI ", "TREX ",
+    "FOCUS ", "PLUS ", "FN ", "MASTER ", "SMART ", "TIMEFOLIO ",
+    "WON ", "BIG ",
+)
+ETF_NAME_KEYWORDS = ("ETF", "ETN", "SPAC", "리츠", "액티브",
+                     "선물지수", "인버스", "레버리지")
+
+
+def _is_etf_like(name: str) -> bool:
+    return (any(name.startswith(p) for p in ETF_BRAND_PREFIXES)
+            or any(kw in name for kw in ETF_NAME_KEYWORDS))
+
+
+def _check_tradeable(pdata: dict) -> tuple[bool, str]:
     """
-    # 1) 중복 제거 (상위 랭크 유지)
+    KIS inquire-price 응답 필드로 거래 가능 여부 판정.
+    Returns (ok, reason). reason은 실패 시에만 채워짐.
+    """
+    stat = (pdata.get("iscd_stat_cls_code") or "00").strip()
+    if stat in _BAD_STATUS_CODES:
+        labels = {
+            "51": "관리종목", "52": "거래정지", "53": "정리매매",
+            "54": "정리매매(공시기준)", "55": "매매거래정지",
+            "56": "매매중단(상장폐지)", "57": "매매중단(상장폐지예고)",
+            "58": "매매중단", "59": "단기과열",
+        }
+        return False, f"{labels.get(stat, '상태이상')} (코드 {stat})"
+
+    if (pdata.get("temp_stop_yn") or "N").strip().upper() == "Y":
+        return False, "임시 거래정지"
+    if (pdata.get("sltr_yn") or "N").strip().upper() == "Y":
+        return False, "정리매매 진행"
+    if (pdata.get("mang_issu_cls_code") or "N").strip().upper() == "Y":
+        return False, "관리종목"
+
+    warn = (pdata.get("mrkt_warn_cls_code") or "00").strip()
+    # 00=정상, 01=주의, 02=경고, 03=위험 — 경고 이상은 거부
+    if warn not in ("00", "01"):
+        warn_labels = {"02": "시장경고", "03": "위험"}
+        return False, f"{warn_labels.get(warn, '시장경고')} (코드 {warn})"
+
+    # 거래량 0 = 사실상 거래 안 됨 (장 시작 전 제외 — 다른 검증으로 충분)
+    return True, ""
+
+
+def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], dict[str, dict], list[dict]]:
+    """
+    4중 검증:
+    1) 코드 정규화 + 중복 제거
+    2) KIS 종목코드 존재 여부 (get_stock_price)
+    3) ETF/ETN/SPAC 여부 (종목명 패턴 + KIS market 구분)
+    4) 거래 가능 여부 (관리종목/거래정지/정리매매/시장경고)
+
+    Returns: (cleaned, price_map, rejected)
+      - rejected: 검증 탈락한 코드 리스트 (재추천 시 exclude용)
+    """
     seen_codes: set[str] = set()
     unique = []
+    rejected: list[dict] = []
+
+    # 1) 코드 정규화 + 중복
     for r in sorted(recs, key=lambda x: x.get("rank", 999)):
         code = (r.get("code") or "").strip().zfill(6)
-        if not code or code in seen_codes:
+        if not code:
+            rejected.append({"code": code, "name": r.get("name", ""), "reason": "빈 코드"})
+            continue
+        if code in seen_codes:
             logger.warning("중복 코드 제거: %s (%s)", code, r.get("name"))
+            rejected.append({"code": code, "name": r.get("name", ""), "reason": "중복"})
             continue
         seen_codes.add(code)
         r["code"] = code
         unique.append(r)
 
-    # 2) KIS 가격/이름 조회 (검증)
+    # 2) KIS 일괄 시세 조회 (존재 여부 + 거래상태 한 번에)
     codes = [r["code"] for r in unique]
-    logger.info("종목 검증/시세 조회: %s", codes)
+    logger.info("종목 검증/시세 조회 (%d개)", len(codes))
     price_map = kis.get_multiple_prices(codes)
 
-    # ETF/ETN/펀드 패턴 (검증 단계 2차 방어선)
-    ETF_BRAND_PREFIXES = (
-        "KODEX ", "TIGER ", "ARIRANG ", "KBSTAR ", "HANARO ", "KOSEF ",
-        "KINDEX ", "KIWOOM ", "ACE ", "SOL ", "RISE ", "WOORI ", "TREX ",
-        "FOCUS ", "PLUS ", "FN ", "MASTER ", "SMART ", "TIMEFOLIO ",
-        "WON ", "BIG ",
-    )
-    ETF_NAME_KEYWORDS = ("ETF", "ETN", "SPAC", "리츠", "액티브",
-                        "선물지수", "인버스", "레버리지")
-
-    def _is_etf_like(name: str) -> bool:
-        return (any(name.startswith(p) for p in ETF_BRAND_PREFIXES)
-                or any(kw in name for kw in ETF_NAME_KEYWORDS))
-
-    # 3) 인식 + 종목명 확보 + ETF/ETN 제외 + 이름 덮어쓰기
-    cleaned = []
+    cleaned: list[dict] = []
     for r in unique:
         code = r["code"]
         pdata = price_map.get(code)
+
+        # 2-a) 존재 여부
         if not pdata:
-            logger.warning("⚠️ KIS 미인식 코드 드롭: %s (AI 이름: %s)", code, r.get("name"))
+            logger.warning("⚠️ 드롭 [%s] %s — KIS 미인식 코드", code, r.get("name"))
+            rejected.append({"code": code, "name": r.get("name", ""), "reason": "KIS 미인식"})
             continue
+
+        # 3) 종목명 + ETF/ETN/SPAC 필터
         kis_name = kis.get_stock_name(code)
         ai_name = (r.get("name") or "").strip()
         if not kis_name:
-            logger.warning("⚠️ KIS 종목명 조회 실패 - 드롭: [%s] (AI 이름: %s)", code, ai_name)
+            logger.warning("⚠️ 드롭 [%s] %s — 종목명 조회 실패", code, ai_name)
+            rejected.append({"code": code, "name": ai_name, "reason": "종목명 미확보"})
             continue
-        if _is_etf_like(kis_name):
-            logger.warning("⚠️ ETF/펀드 드롭: [%s] %s", code, kis_name)
+        if _is_etf_like(kis_name) or kis.is_etf_or_etn(code):
+            logger.warning("⚠️ 드롭 [%s] %s — ETF/ETN/SPAC", code, kis_name)
+            rejected.append({"code": code, "name": kis_name, "reason": "ETF/ETN/SPAC"})
             continue
+
+        # 4) 거래 가능 여부 (관리종목/거래정지/정리매매 등)
+        ok, reason = _check_tradeable(pdata)
+        if not ok:
+            logger.warning("⚠️ 드롭 [%s] %s — %s", code, kis_name, reason)
+            rejected.append({"code": code, "name": kis_name, "reason": reason})
+            continue
+
+        # 이름 정정 (hallucination 방지)
         if kis_name != ai_name:
-            logger.info("종목명 정정: [%s] %s → %s", code, ai_name, kis_name)
+            logger.info("종목명 정정 [%s]: %s → %s", code, ai_name, kis_name)
             r["name"] = kis_name
         cleaned.append(r)
 
-    # 4) TOP_N_STOCKS로 자르고 1부터 재정렬
-    from config import TOP_N_STOCKS
-    cleaned = cleaned[:TOP_N_STOCKS]
-    for i, r in enumerate(cleaned, 1):
-        r["rank"] = i
-
     logger.info(
-        "검증 완료: AI %d개 → 유효 %d개 → 최종 %d개 (드롭 %d)",
-        len(recs), len(cleaned), len(cleaned), len(recs) - len(cleaned),
+        "검증 결과: AI %d개 → 통과 %d개, 탈락 %d개",
+        len(recs), len(cleaned), len(rejected),
     )
-    return cleaned, price_map
+    return cleaned, price_map, rejected
+
+
+def _one_recommendation_pass(
+    news_text: str, kospi_display: str, kosdaq_display: str,
+    recent: list[dict], tech_text: str, regime_text: str,
+    excluded_codes: set[str],
+) -> tuple[dict, list[dict], dict, list[dict]]:
+    """
+    AI 호출 → 검증 1회. excluded_codes는 회피 힌트로 전달.
+    Returns (analysis, cleaned, price_map, rejected)
+    """
+    extra_exclude = [
+        {"stock_code": c, "stock_name": "(직전 시도 탈락)",
+         "last_date": date.today().isoformat(), "times": 1}
+        for c in excluded_codes
+    ]
+    excluded_for_ai = (recent or []) + extra_exclude
+
+    analysis = analyze_and_recommend(
+        news_text, kospi_display, kosdaq_display,
+        recent_excluded=excluded_for_ai,
+        tech_candidates_text=tech_text,
+        regime_text=regime_text,
+    )
+    cleaned, price_map, rejected = _validate_and_clean_recommendations(
+        analysis["recommendations"]
+    )
+    return analysis, cleaned, price_map, rejected
 
 
 def run_daily_briefing():
@@ -140,20 +222,58 @@ def run_daily_briefing():
         logger.warning("기술적 스크리닝 실패 — 뉴스 기반으로 폴백: %s", e)
         tech_text = ""
 
-    # 4b. AI 분석 (시장 상태 + 뉴스 + 기술 후보 + 회피)
+    # 4b. AI 추천 + 검증 (필요 시 재시도)
     recent = get_recent_recommended_stocks(days=7)
     logger.info("최근 7일 추천 이력: %d개 종목 (회피 힌트로 전달)", len(recent))
-    analysis = analyze_and_recommend(
-        news_text, kospi_display, kosdaq_display,
-        recent_excluded=recent,
-        tech_candidates_text=tech_text,
-        regime_text=regime_text,
-    )
+
+    MAX_AI_ATTEMPTS = 2
+    MIN_VALID_FOR_RETRY = 5
+
+    excluded_codes: set[str] = set()
+    cleaned_all: list[dict] = []
+    price_map: dict[str, dict] = {}
+    analysis = None
+    seen_codes: set[str] = set()
+    all_rejected: list[dict] = []
+
+    for attempt in range(1, MAX_AI_ATTEMPTS + 1):
+        logger.info(
+            "── AI 추천 시도 %d/%d (회피 코드 %d개) ──",
+            attempt, MAX_AI_ATTEMPTS, len(excluded_codes),
+        )
+        analysis, pass_cleaned, pass_pmap, pass_rejected = _one_recommendation_pass(
+            news_text, kospi_display, kosdaq_display, recent,
+            tech_text, regime_text, excluded_codes,
+        )
+        all_rejected.extend(pass_rejected)
+
+        # 시도된 모든 코드(통과/탈락)를 다음 시도 회피 대상에 추가
+        for r in analysis.get("recommendations", []):
+            c = (r.get("code") or "").strip().zfill(6)
+            if c:
+                excluded_codes.add(c)
+
+        # 신규 통과 종목만 누적
+        for r in pass_cleaned:
+            if r["code"] not in seen_codes:
+                cleaned_all.append(r)
+                seen_codes.add(r["code"])
+        price_map.update(pass_pmap)
+
+        if len(cleaned_all) >= MIN_VALID_FOR_RETRY:
+            logger.info("검증 통과 충분 (%d개) — 재시도 불필요", len(cleaned_all))
+            break
+        if attempt < MAX_AI_ATTEMPTS:
+            logger.info(
+                "검증 통과 부족 (%d개 < %d) — AI 재추천 시도",
+                len(cleaned_all), MIN_VALID_FOR_RETRY,
+            )
+
+    cleaned_recs = cleaned_all
+    logger.info("최종 검증 통과: %d개 (재시도 %d회 포함)", len(cleaned_recs), attempt)
+
     if regime_info:
         analysis["regime_info"] = regime_info
-
-    # 5. 종목 검증 (코드 유효성/중복/이름 정정)
-    cleaned_recs, price_map = _validate_and_clean_recommendations(analysis["recommendations"])
 
     # 6. 점수 필터 — 기술적 스크리닝 score ≥ MIN_SCORE_THRESHOLD인 종목만 유지
     from config import MIN_SCORE_THRESHOLD, TOP_N_STOCKS
