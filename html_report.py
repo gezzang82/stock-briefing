@@ -134,7 +134,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <h1>📊 주식 AI 백테스트 리포트</h1>
   <p class="meta">
     최종 업데이트: {updated_at} KST<br>
-    평가 기준: 추천일 +14일 시점 수익률 (8개 티어)
+    평가 기준: 추천일 +14일 시점 수익률 (8개 티어)<br>
+    <a href="./workflow.html" style="color:#3498db;text-decoration:none;border-bottom:1px dashed #3498db">
+    🔧 시스템 워크플로우 보기 →</a>
   </p>
 
 {body}
@@ -460,3 +462,11 @@ def generate_html_report(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html, encoding="utf-8")
     logger.info("HTML 리포트 생성: %s (%d bytes)", output, output.stat().st_size)
+
+    # 워크플로우 시각화 페이지도 같이 생성
+    try:
+        from workflow_page import generate_workflow_page
+        workflow_out = output.parent / "workflow.html"
+        generate_workflow_page(workflow_out)
+    except Exception as e:
+        logger.warning("워크플로우 페이지 생성 실패 (메인 리포트는 정상): %s", e)

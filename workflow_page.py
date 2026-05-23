@@ -1,0 +1,460 @@
+"""
+주식 AI 브리핑 시스템 워크플로우 시각화 페이지 생성.
+public/workflow.html로 출력 → GitHub Pages에 자동 배포.
+메인 대시보드의 링크로 접근.
+"""
+import logging
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+KST = timezone(timedelta(hours=9))
+
+HTML = r"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주식 AI 브리핑 — 시스템 워크플로우</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f9fc; --card: #ffffff; --text: #2c3e50; --muted: #7f8c8d;
+    --border: #ecf0f1; --accent: #3498db;
+    --green: #27ae60; --orange: #e67e22; --red: #e74c3c;
+    --purple: #9b59b6; --teal: #16a085; --pink: #e91e63;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+                 'Noto Sans KR', 'Helvetica Neue', sans-serif;
+    max-width: 980px; margin: 0 auto; padding: 1.5rem 1rem;
+    background: var(--bg); color: var(--text); line-height: 1.55;
+  }
+  /* 헤더 */
+  .hero { text-align: center; padding: 1rem 0 2rem; }
+  .hero h1 { margin: 0 0 0.4rem; font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+  .hero p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  .hero a {
+    display: inline-block; margin-top: 1rem;
+    color: var(--accent); text-decoration: none;
+    border-bottom: 1px dashed var(--accent); padding-bottom: 1px;
+  }
+  /* 섹션 */
+  section { margin: 2.5rem 0; }
+  section > h2 {
+    font-size: 1.25rem; margin: 0 0 1rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  section > h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--text); color: white;
+    font-size: 0.85rem; font-weight: 700;
+  }
+  section > .desc { color: var(--muted); font-size: 0.9rem; margin: -0.4rem 0 1rem; }
+  /* 카드 */
+  .grid { display: grid; gap: 1rem; }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 640px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--card); border-radius: 14px; padding: 1.1rem 1.2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    border-top: 3px solid var(--accent);
+  }
+  .card.green { border-top-color: var(--green); }
+  .card.orange { border-top-color: var(--orange); }
+  .card.red { border-top-color: var(--red); }
+  .card.purple { border-top-color: var(--purple); }
+  .card.teal { border-top-color: var(--teal); }
+  .card.pink { border-top-color: var(--pink); }
+  .card h3 {
+    margin: 0 0 0.4rem; font-size: 1rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .card h3 .ic { font-size: 1.2rem; }
+  .card p { margin: 0.3rem 0; color: var(--muted); font-size: 0.88rem; }
+  .card .meta {
+    font-size: 0.78rem; color: var(--muted); margin-top: 0.6rem;
+    font-family: 'SF Mono', Menlo, Monaco, monospace;
+    background: var(--bg); padding: 4px 8px; border-radius: 6px;
+    display: inline-block;
+  }
+  /* Mermaid */
+  .mermaid-wrap {
+    background: var(--card); border-radius: 14px;
+    padding: 1.5rem 1rem; overflow-x: auto;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  /* 검증 체크리스트 */
+  .checklist {
+    background: var(--card); border-radius: 14px; padding: 1.2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .check-item {
+    display: flex; gap: 0.8rem; padding: 0.8rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-num {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
+    background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem;
+  }
+  .check-body { flex: 1; }
+  .check-body strong { font-size: 0.95rem; }
+  .check-body p { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; }
+  /* 시그널 태그 */
+  .tag {
+    display: inline-block; padding: 1px 7px; border-radius: 8px;
+    font-size: 0.7rem; font-weight: 700;
+    margin: 2px 2px 2px 0;
+  }
+  .tag.blue { color: #2980b9; background: rgba(52,152,219,0.13); }
+  .tag.green { color: #27ae60; background: rgba(39,174,96,0.13); }
+  .tag.red { color: #c0392b; background: rgba(192,57,43,0.13); }
+  .tag.orange { color: #d35400; background: rgba(211,84,0,0.13); }
+  .tag.purple { color: #8e44ad; background: rgba(142,68,173,0.13); }
+  /* 가중치 표 */
+  .weight-table {
+    width: 100%; border-collapse: collapse; font-size: 0.88rem;
+    background: var(--card); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .weight-table th, .weight-table td {
+    padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  .weight-table th { background: #f8f9fa; font-weight: 600; font-size: 0.8rem; color: var(--muted); }
+  .weight-table td:not(:first-child) { text-align: center; font-weight: 600; }
+  /* 채널 박스 */
+  .channels { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 640px) { .channels { grid-template-columns: 1fr; } }
+  .channel {
+    background: linear-gradient(135deg, #fef9c3 0%, #fde68a 100%);
+    padding: 1.2rem; border-radius: 14px; text-align: center;
+  }
+  .channel.web {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
+  }
+  .channel .ic { font-size: 2rem; }
+  .channel h3 { margin: 0.4rem 0; }
+  .channel p { margin: 0; font-size: 0.85rem; color: #4a5568; }
+  /* footer */
+  footer {
+    margin-top: 3rem; padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center; color: var(--muted); font-size: 0.8rem;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>📊 주식 AI 브리핑</h1>
+  <p>시장 데이터 + AI + 검증을 거친 매일 자동 추천 시스템</p>
+  <a href="./">← 메인 대시보드로</a>
+</div>
+
+<!-- 1. 전체 흐름 -->
+<section>
+  <h2><span class="num">1</span> 전체 흐름</h2>
+  <p class="desc">매일 06:30 KST 트리거 → 데이터 수집 → AI 추천 → 검증 → 카카오톡 전송</p>
+  <div class="mermaid-wrap">
+    <pre class="mermaid">
+flowchart TD
+    A([🕕 GitHub Actions Cron<br/>평일 06:30 KST]) --> B{휴장일 체크}
+    B -->|주말/공휴일| Z([스킵])
+    B -->|영업일| C[📦 DB + KIS 토큰<br/>캐시 복원]
+    C --> D[📡 데이터 수집]
+    D --> D1[KIS 지수<br/>KOSPI/KOSDAQ]
+    D --> D2[Naver 뉴스<br/>가중치 + 감성]
+    D --> D3[KIS 거래량 순위<br/>+ 일봉 + 수급]
+    D1 --> E[🌐 시장 상태 판단<br/>bullish/sideways/bearish]
+    D2 --> E
+    D3 --> E
+    E --> F[🔬 기술적 스크리닝<br/>외국인 + 기관 + 거래대금]
+    F --> G[🤖 AI 분석<br/>gpt-4o-mini]
+    G --> H{검증 4단계}
+    H -->|< 5개| G
+    H -->|>= 5개| I[📏 점수 필터<br/>>= 50점만]
+    I --> J[💾 DB 저장<br/>+ Snapshot]
+    J --> K[🌐 HTML 대시보드]
+    J --> L[📱 카카오톡 발송]
+
+    style A fill:#3498db,stroke:#2980b9,color:#fff
+    style E fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style F fill:#16a085,stroke:#138d75,color:#fff
+    style G fill:#e67e22,stroke:#d35400,color:#fff
+    style J fill:#27ae60,stroke:#229954,color:#fff
+    style L fill:#f1c40f,stroke:#f39c12,color:#fff
+    style K fill:#3498db,stroke:#2980b9,color:#fff
+    </pre>
+  </div>
+</section>
+
+<!-- 2. 스케줄 -->
+<section>
+  <h2><span class="num">2</span> 자동 스케줄</h2>
+  <div class="grid grid-2">
+    <div class="card blue">
+      <h3><span class="ic">🌅</span> 일일 브리핑</h3>
+      <p>평일 매일 아침 자동 실행. 시장 데이터 분석 → 추천 종목 카카오톡 전송.</p>
+      <span class="meta">cron: '30 21 * * 0-4' (UTC) = 평일 06:30 KST</span>
+    </div>
+    <div class="card purple">
+      <h3><span class="ic">📅</span> 주간 리포트</h3>
+      <p>매주 일요일 통계 요약. 월별 적중률, 평균 수익률, 승률.</p>
+      <span class="meta">cron: '0 0 * * 0' (UTC) = 일요일 09:00 KST</span>
+    </div>
+  </div>
+  <p class="desc" style="margin-top: 1rem;">
+    + <strong>휴장일 자동 스킵</strong>: market_calendar.py가 한국 공휴일 + KRX 연말폐장 감지
+  </p>
+</section>
+
+<!-- 3. 데이터 수집 -->
+<section>
+  <h2><span class="num">3</span> 데이터 수집</h2>
+  <div class="grid grid-3">
+    <div class="card blue">
+      <h3><span class="ic">📈</span> KIS 시장 데이터</h3>
+      <p>한국투자증권 Open API로 시세, 거래량, 투자자별 매매동향, 프로그램 매매 수집.</p>
+      <span class="tag blue">KOSPI/KOSDAQ 지수</span>
+      <span class="tag blue">거래량 순위 50개</span>
+      <span class="tag blue">일봉 60일치</span>
+      <span class="tag blue">외국인 + 기관 매매</span>
+    </div>
+    <div class="card green">
+      <h3><span class="ic">📰</span> Naver 뉴스</h3>
+      <p>10개 키워드 × 15건 = 150건 raw → 가중치 + 중복제거 + 감성 분석.</p>
+      <span class="tag green">연합 +3 / 한경 +2 / 매경 +2</span>
+      <span class="tag red">블로그/광고 -2</span>
+      <span class="tag green">24h 트렌드 + 감성 Δ</span>
+    </div>
+    <div class="card orange">
+      <h3><span class="ic">🗄️</span> DB 조회</h3>
+      <p>최근 7일 추천 이력을 AI에 회피 힌트로 전달 (동일 종목 반복 방지).</p>
+      <span class="tag orange">recommendations 테이블</span>
+      <span class="tag orange">7일 누적</span>
+    </div>
+  </div>
+</section>
+
+<!-- 4. 시장 상태 판단 -->
+<section>
+  <h2><span class="num">4</span> 시장 상태(regime) 판단 → 가중치 결정</h2>
+  <p class="desc">5개 지표 점수화 → bullish / sideways / bearish 분류 → 가중치 자동 조정</p>
+  <table class="weight-table">
+    <thead>
+      <tr>
+        <th>시장 상태</th>
+        <th>외국인 수급</th>
+        <th>기관 수급</th>
+        <th>거래대금 증가율</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag green">🟢 Bullish</span> 강세장</td>
+        <td>35%</td><td>25%</td><td><strong style="color:#27ae60">40%</strong></td>
+      </tr>
+      <tr>
+        <td><span class="tag orange">🟡 Sideways</span> 혼조세</td>
+        <td>40%</td><td>30%</td><td>30%</td>
+      </tr>
+      <tr>
+        <td><span class="tag red">🔴 Bearish</span> 약세장</td>
+        <td><strong style="color:#27ae60">50%</strong></td><td>30%</td><td>20%</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="desc" style="margin-top: 0.8rem;">
+    판단 지표: <span class="tag purple">KOSPI vs MA20</span>
+    <span class="tag purple">20일 변동성</span>
+    <span class="tag purple">거래대금 5일 평균</span>
+    <span class="tag purple">상승 종목 비율</span>
+    <span class="tag purple">5일 모멘텀</span>
+  </p>
+</section>
+
+<!-- 5. 기술적 스크리닝 -->
+<section>
+  <h2><span class="num">5</span> 기술적 스크리닝 + AI 분석</h2>
+  <div class="grid grid-2">
+    <div class="card teal">
+      <h3><span class="ic">🔬</span> 스크리닝 (점수 0~100)</h3>
+      <p>KIS 거래량 상위 50개 → ETF 필터 → 5일 외국인/기관 누적 + 거래대금 증가율 기반 점수.</p>
+      <span class="tag green">외국인 비중 → 0~40점</span>
+      <span class="tag green">기관 비중 → 0~30점</span>
+      <span class="tag green">거래대금 증가율 → 0~30점</span>
+    </div>
+    <div class="card orange">
+      <h3><span class="ic">🤖</span> AI 종합 (gpt-4o-mini)</h3>
+      <p>뉴스 + 기술 후보 + 시장 상태 + 회피 종목 → JSON 13개 추천 생성. 검증 후 부족하면 자동 재시도.</p>
+      <span class="tag orange">뉴스 enriched 컨텍스트</span>
+      <span class="tag orange">기술 후보 20개 + 시그널</span>
+      <span class="tag orange">최대 2회 자동 재추천</span>
+    </div>
+  </div>
+</section>
+
+<!-- 6. 검증 4단계 -->
+<section>
+  <h2><span class="num">6</span> 검증 — 4단계 통과해야 추천 자격</h2>
+  <p class="desc">AI 환각(hallucination) 방지 + 거래 가능 종목만 선별</p>
+  <div class="checklist">
+    <div class="check-item">
+      <div class="check-num">1</div>
+      <div class="check-body">
+        <strong>KIS 종목코드 존재 여부</strong>
+        <p>get_stock_price 응답으로 실재 코드인지 확인. 미인식 코드는 즉시 드롭.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-num">2</div>
+      <div class="check-body">
+        <strong>종목명 정확성</strong>
+        <p>KIS 일봉 endpoint의 hts_kor_isnm으로 canonical 이름 확보. AI가 잘못 매칭한 이름 자동 정정 (예: "한국전력"으로 표시한 005740 → 실제 "크라운제과").</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-num">3</div>
+      <div class="check-body">
+        <strong>ETF/ETN/SPAC 여부</strong>
+        <p>브랜드 prefix (KODEX/TIGER/KIWOOM 등) + 키워드 (액티브/선물지수/인버스/레버리지) + KIS 마켓 구분 다중 필터.</p>
+      </div>
+    </div>
+    <div class="check-item">
+      <div class="check-num">4</div>
+      <div class="check-body">
+        <strong>거래 가능 여부</strong>
+        <p>KIS 상태 코드로 관리종목/거래정지/정리매매/시장경고/임시정지 모두 차단.
+        <span class="tag red">iscd_stat_cls_code 51~59 ❌</span>
+        <span class="tag red">temp_stop_yn = Y ❌</span>
+        <span class="tag red">sltr_yn = Y ❌</span>
+        <span class="tag red">mrkt_warn_cls_code 02/03 ❌</span></p>
+      </div>
+    </div>
+  </div>
+  <p class="desc" style="margin-top: 0.8rem;">
+    검증 통과 < 5개면 AI가 자동으로 다시 호출됨 (탈락 코드를 회피 목록에 추가)
+  </p>
+</section>
+
+<!-- 7. 점수 필터 -->
+<section>
+  <h2><span class="num">7</span> 점수 필터 — 가변 추천 개수</h2>
+  <p class="desc">신뢰도 점수(0~100) ≥ 50 종목만 통과. 강세장이면 8~10개, 약세장이면 0~3개.</p>
+  <div class="grid grid-3">
+    <div class="card green">
+      <h3>강한 시그널</h3>
+      <p style="font-size: 1.4rem; margin: 0.2rem 0; font-weight: 700;">70+</p>
+      <p>외국인 + 기관 동시 매수 + 거래대금 급증</p>
+    </div>
+    <div class="card blue">
+      <h3>평균</h3>
+      <p style="font-size: 1.4rem; margin: 0.2rem 0; font-weight: 700;">50~70</p>
+      <p>수급 시그널 + 거래대금 1.5x↑ (기본 임계점)</p>
+    </div>
+    <div class="card red">
+      <h3>제외</h3>
+      <p style="font-size: 1.4rem; margin: 0.2rem 0; font-weight: 700;">&lt; 50</p>
+      <p>약한 시그널 — 매매 보류 권고</p>
+    </div>
+  </div>
+</section>
+
+<!-- 8. 저장 -->
+<section>
+  <h2><span class="num">8</span> 저장 — SQLite + Snapshot</h2>
+  <div class="grid grid-2">
+    <div class="card green">
+      <h3><span class="ic">💾</span> 운영 데이터</h3>
+      <p><code>recommendations</code> — 추천 종목 + score + MFE/MAE/Final<br>
+      <code>price_tracking</code> — 일별 가격 추적 (14일)<br>
+      <code>accuracy_results</code> — 만기 도달 적중률 통계</p>
+    </div>
+    <div class="card purple">
+      <h3><span class="ic">📸</span> Snapshot</h3>
+      <p><code>snapshot_logs</code> — 추천 당시 전체 컨텍스트 JSON 저장. 시장 상태, 뉴스 감성, 후보 점수, 검증 탈락 사유까지 — 사후 분석용.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 9. 추적 -->
+<section>
+  <h2><span class="num">9</span> 14일 추적 — MFE / MAE / Final</h2>
+  <div class="grid grid-3">
+    <div class="card green">
+      <h3>MFE</h3>
+      <p>Max Favorable Excursion<br><strong>14일 중 최고 상승률</strong></p>
+    </div>
+    <div class="card red">
+      <h3>MAE</h3>
+      <p>Max Adverse Excursion<br><strong>14일 중 최대 하락률</strong></p>
+    </div>
+    <div class="card blue">
+      <h3>Final</h3>
+      <p>14일 후 최종 수익률<br><strong>3% 이상 = 적중</strong></p>
+    </div>
+  </div>
+  <p class="desc" style="margin-top: 0.8rem;">
+    매일 가격 기록 → 8개 티어 분류 (+30%↑ / +10~30 / +5~10 / 0~5 / -5~0 / -10~-5 / -30~-10 / ≤-30) → 월별 집계
+  </p>
+</section>
+
+<!-- 10. 출력 채널 -->
+<section>
+  <h2><span class="num">10</span> 출력 채널</h2>
+  <div class="channels">
+    <div class="channel">
+      <div class="ic">📱</div>
+      <h3>카카오톡 나에게 보내기</h3>
+      <p>매일 06:30 + 주간 리포트<br>토큰 자동 갱신 (영구 운영)</p>
+    </div>
+    <div class="channel web">
+      <div class="ic">🌐</div>
+      <h3>HTML 대시보드</h3>
+      <p>GitHub Pages 자동 배포<br>월별 도넛 차트 + 종목 표</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  생성: __GENERATED__ KST · 매 브리핑마다 자동 갱신<br>
+  <a href="./">메인 대시보드</a> · <a href="https://github.com/gezzang82/stock-briefing" target="_blank">GitHub</a>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    flowchart: { curve: 'basis', padding: 10 }
+  });
+</script>
+
+</body>
+</html>
+"""
+
+
+def generate_workflow_page(output_path: str | Path):
+    """워크플로우 시각화 HTML 페이지 생성 → public/workflow.html"""
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
+    html = HTML.replace("__GENERATED__", now)
+    output.write_text(html, encoding="utf-8")
+    logger.info("워크플로우 페이지 생성: %s (%d bytes)", output, output.stat().st_size)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    generate_workflow_page("public/workflow.html")
+    print("Open: public/workflow.html")
