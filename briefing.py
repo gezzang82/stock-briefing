@@ -7,7 +7,6 @@ from datetime import date
 from accuracy_tracker import format_accuracy_summary, record_prices_for_active_recs
 from ai_analyzer import analyze_and_recommend
 from database import get_recent_recommended_stocks, init_db, save_recommendations
-from discord_sender import send_briefing as send_discord_briefing
 from kis_api import kis
 from news_fetcher import fetch_financial_news
 
@@ -509,20 +508,8 @@ def run_daily_briefing():
     except Exception as e:
         logger.warning("HTML 대시보드 생성 실패 (전송은 계속): %s", e)
 
-    # 10. Discord 브리핑 전송
+    # 10. 카카오톡 나에게 보내기
     accuracy_text = format_accuracy_summary()
-    logger.info("Discord 브리핑 전송 중...")
-    ok = send_discord_briefing(
-        today=today,
-        kospi_str=kospi_str,
-        kosdaq_str=kosdaq_str,
-        analysis=analysis,
-        price_map=price_map,
-        accuracy_text=accuracy_text,
-    )
-    logger.info("Discord 전송 %s", "성공" if ok else "실패/건너뜀")
-
-    # 11. Kakao 나에게 보내기 (토큰 설정 시에만)
     try:
         from kakao_sender import send_message as kakao_send
         from html_report import DASHBOARD_URL
@@ -532,7 +519,7 @@ def run_daily_briefing():
             regime_label = REGIME_LABEL.get(regime_info["regime"], ("", ""))[0]
 
         if qualified:
-            top_names = " · ".join(f"{r['name']}" for r in qualified[:3])
+            top_names = " · ".join(r["name"] for r in qualified[:3])
             kakao_msg = (
                 f"📈 주식 AI 브리핑 [{today}]\n"
                 f"{kospi_str}\n{kosdaq_str}\n"
@@ -549,10 +536,10 @@ def run_daily_briefing():
                 f"오늘은 추천 종목 없음 (매매 보류)\n"
                 f"📱 대시보드: {DASHBOARD_URL}"
             )
-        kakao_ok = kakao_send(kakao_msg)
-        logger.info("Kakao 전송 %s", "성공" if kakao_ok else "건너뜀/실패")
+        ok = kakao_send(kakao_msg)
+        logger.info("카카오톡 전송 %s", "성공" if ok else "실패/건너뜀")
     except Exception as e:
-        logger.warning("Kakao 전송 중 예외 (계속 진행): %s", e)
+        logger.warning("카카오톡 전송 중 예외: %s", e)
 
     logger.info("=== 브리핑 완료 ===")
     return analysis

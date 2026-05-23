@@ -2,7 +2,7 @@
 주간 백테스트 리포트
 - 월별 티어 분포 + 종목/섹터 성과를 HTML로 생성 (public/index.html)
 - GitHub Pages에 자동 배포되어 모바일에서 URL로 접근
-- Discord에는 요약 + 대시보드 링크 전송
+- 카카오톡 나에게 보내기로 요약 + 대시보드 링크 전송
 """
 import logging
 from datetime import date, timedelta
@@ -13,8 +13,8 @@ from accuracy_tracker import (
 )
 from config import BASE_DIR, DB_PATH
 from database import get_conn
-from discord_sender import _post as discord_post
 from html_report import DASHBOARD_URL, generate_html_report
+from kakao_sender import send_message as kakao_send
 
 logger = logging.getLogger(__name__)
 
@@ -65,53 +65,30 @@ def fetch_sector_performance(days: int = 30) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# ============== Discord 임베드 ==============
+# ============== 카카오톡 메시지 빌더 ==============
 
-def _format_month_block(stats: dict) -> str:
+def _format_month_line(stats: dict) -> str:
+    """한 달 통계를 한 줄로 간략화 (카카오 글자수 제약)"""
     month = stats["month"]
     if stats["matured_count"] == 0:
         if stats["total_recs"] == 0:
-            return f"**{month}** — 추천 없음"
-        return (
-            f"**{month}** — 추천 {stats['total_recs']}개 "
-            f"(진행중 {stats['in_progress_count']}개, 만기 미도달)"
-        )
-    lines = [
-        f"**{month}** — 만기 {stats['matured_count']}개"
-        + (f" / 진행중 {stats['in_progress_count']}" if stats["in_progress_count"] else "")
-    ]
-    for label, count in zip(TIER_LABELS, stats["tier_counts"]):
-        if count == 0:
-            continue
-        pct = count / stats["matured_count"] * 100
-        lines.append(f"  · {label:<10} {count}개 ({pct:.1f}%)")
-    lines.append(
-        f"  📈 평균 **{stats['avg_return']:+.2f}%** · "
-        f"승률 {stats['win_rate']:.0f}% · 강승 {stats['strong_win_rate']:.0f}%"
+            return f"{month}: 추천 없음"
+        return f"{month}: 진행중 {stats['in_progress_count']}개 (만기 미도달)"
+    return (
+        f"{month}: 만기 {stats['matured_count']}개 / "
+        f"평균 {stats['avg_return']:+.2f}% / "
+        f"승률 {stats['win_rate']:.0f}%"
     )
-    return "\n".join(lines)
 
 
-def build_embeds(current_month: dict, prev_month: dict | None) -> list[dict]:
-    if current_month["matured_count"] > 0:
-        color = COLOR_GREEN if current_month["avg_return"] >= 0 else COLOR_RED
-    else:
-        color = COLOR_BLUE
-
-    parts = [_format_month_block(current_month)]
+def build_kakao_message(current_month: dict, prev_month: dict | None) -> str:
+    lines = ["📊 주간 백테스트 리포트", ""]
+    lines.append(_format_month_line(current_month))
     if prev_month:
-        parts.append("")
-        parts.append(_format_month_block(prev_month))
-    parts.append("")
-    parts.append(f"📱 **[전체 리포트 보기 →]({DASHBOARD_URL})**")
-
-    main_embed = {
-        "title": "📊 월별 적중 분포 리포트",
-        "url": DASHBOARD_URL,
-        "color": color,
-        "description": "\n".join(parts)[:4096],
-    }
-    return [main_embed]
+        lines.append(_format_month_line(prev_month))
+    lines.append("")
+    lines.append(f"📱 대시보드: {DASHBOARD_URL}")
+    return "\n".join(lines)
 
 
 # ============== 메인 ==============
@@ -152,10 +129,10 @@ def run_weekly_report():
     # 1) HTML 리포트 생성 (Pages에서 서빙됨)
     generate_html_report(monthly_all, week_items, sectors, HTML_OUTPUT)
 
-    # 2) Discord에는 요약 + URL 링크
-    embeds = build_embeds(current_month, prev_month_stats)
-    ok = discord_post({"embeds": embeds})
-    logger.info("Discord 주간 리포트 전송 %s", "성공" if ok else "실패")
+    # 2) 카카오톡 나에게 보내기 — 요약 + 대시보드 링크
+    msg = build_kakao_message(current_month, prev_month_stats)
+    ok = kakao_send(msg)
+    logger.info("카카오톡 주간 리포트 전송 %s", "성공" if ok else "실패")
 
     logger.info("=== 주간 리포트 완료 ===")
 
