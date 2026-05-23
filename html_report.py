@@ -260,6 +260,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <li>최종 업데이트 : {updated_at} KST</li>
     <li>평가 기준 : 추천일 +14일 시점 수익률 (8개 티어)</li>
     <li><a href="./workflow.html" class="workflow-link">🔧 시스템 워크플로우 보기 →</a></li>
+    <li><a href="./demo.html" class="workflow-link">🎨 디자인 미리보기 (가짜 데이터) →</a></li>
   </ul>
 
 {body}
@@ -689,3 +690,92 @@ def generate_html_report(
         generate_workflow_page(workflow_out)
     except Exception as e:
         logger.warning("워크플로우 페이지 생성 실패 (메인 리포트는 정상): %s", e)
+
+    # 데모 페이지 생성 (디자인 미리보기용 — 가짜 데이터)
+    try:
+        demo_out = output.parent / "demo.html"
+        generate_demo_page(demo_out)
+    except Exception as e:
+        logger.warning("데모 페이지 생성 실패 (메인 리포트는 정상): %s", e)
+
+
+def generate_demo_page(output_path: str | Path):
+    """디자인 검증용 데모 — 현실적 가짜 데이터로 모든 컴포넌트 렌더링"""
+    monthly = [
+        {
+            "month": "2026-05", "matured_count": 30, "in_progress_count": 12,
+            "total_recs": 42, "pending_count": 0,
+            "tier_counts": [3, 7, 8, 5, 4, 2, 1, 0],
+            "avg_return": 4.85, "win_rate": 76.7, "strong_win_rate": 60.0,
+            "avg_mfe": 8.45, "avg_mae": -2.30,
+        },
+        {
+            "month": "2026-04", "matured_count": 22, "in_progress_count": 0,
+            "total_recs": 22, "pending_count": 0,
+            "tier_counts": [0, 2, 3, 4, 5, 4, 3, 1],
+            "avg_return": -2.15, "win_rate": 40.9, "strong_win_rate": 22.7,
+            "avg_mfe": 3.20, "avg_mae": -4.85,
+        },
+        {
+            "month": "2026-03", "matured_count": 18, "in_progress_count": 0,
+            "total_recs": 18, "pending_count": 0,
+            "tier_counts": [1, 3, 4, 5, 3, 1, 1, 0],
+            "avg_return": 2.45, "win_rate": 72.2, "strong_win_rate": 44.4,
+            "avg_mfe": 5.60, "avg_mae": -2.80,
+        },
+    ]
+    items = [
+        {"rec_date": "2026-05-22", "stock_code": "005930", "stock_name": "삼성전자", "sector": "반도체", "latest_return": 7.8, "mfe_pct": 9.2, "mae_pct": -1.5},
+        {"rec_date": "2026-05-22", "stock_code": "000660", "stock_name": "SK하이닉스", "sector": "반도체", "latest_return": 5.2, "mfe_pct": 7.4, "mae_pct": -0.8},
+        {"rec_date": "2026-05-21", "stock_code": "051910", "stock_name": "LG화학", "sector": "2차전지", "latest_return": 4.5, "mfe_pct": 6.1, "mae_pct": -1.2},
+        {"rec_date": "2026-05-21", "stock_code": "009420", "stock_name": "한올바이오파마", "sector": "바이오", "latest_return": 3.8, "mfe_pct": 5.2, "mae_pct": -2.1},
+        {"rec_date": "2026-05-20", "stock_code": "105560", "stock_name": "KB금융", "sector": "금융", "latest_return": 2.1, "mfe_pct": 3.5, "mae_pct": -0.5},
+        {"rec_date": "2026-05-20", "stock_code": "042660", "stock_name": "한화오션", "sector": "조선", "latest_return": 1.5, "mfe_pct": 2.8, "mae_pct": -1.0},
+        {"rec_date": "2026-05-19", "stock_code": "005380", "stock_name": "현대차", "sector": "자동차", "latest_return": -0.5, "mfe_pct": 1.2, "mae_pct": -2.3},
+        {"rec_date": "2026-05-19", "stock_code": "015760", "stock_name": "한국전력", "sector": "전력", "latest_return": -1.8, "mfe_pct": 0.5, "mae_pct": -3.1},
+        {"rec_date": "2026-05-18", "stock_code": "035420", "stock_name": "NAVER", "sector": "IT", "latest_return": -2.5, "mfe_pct": 0.8, "mae_pct": -4.2},
+        {"rec_date": "2026-05-18", "stock_code": "247540", "stock_name": "에코프로비엠", "sector": "2차전지", "latest_return": -3.5, "mfe_pct": 1.5, "mae_pct": -5.8},
+    ]
+    sectors = [
+        {"sector": "반도체", "total": 12, "avg_return": 5.85},
+        {"sector": "2차전지", "total": 8, "avg_return": 2.15},
+        {"sector": "바이오", "total": 6, "avg_return": 1.40},
+        {"sector": "금융", "total": 5, "avg_return": 0.85},
+        {"sector": "자동차", "total": 4, "avg_return": -0.50},
+        {"sector": "IT", "total": 4, "avg_return": -1.25},
+    ]
+    # 임시로 generate_html_report 직접 호출 (workflow_page/demo 재귀 방지를 위해 다른 경로 사용)
+    monthly_sorted = sorted(monthly, key=lambda m: m["month"], reverse=True)
+    body_parts: list[str] = []
+    chart_datas: list[dict] = []
+    default_month = _pick_default_month(monthly_sorted)
+    body_parts.append(_filter_bar(monthly_sorted, default_month))
+    for ms in monthly_sorted:
+        html, chart = _month_card(ms, hidden=(ms["month"] != default_month))
+        body_parts.append(html)
+        if chart:
+            chart_datas.append(chart)
+    body_parts.append(_stock_table(items, "이번 주 추천 종목 성과"))
+    body_parts.append(_sector_table(sectors))
+
+    # 데모임을 알리는 배너 추가
+    demo_banner = (
+        '<div style="background:#fef3c7;border:1px solid #fcd34d;'
+        'padding:0.8rem 1rem;border-radius:10px;margin-bottom:1rem;'
+        'font-size:0.9rem;color:#92400e">'
+        '🎨 <strong>디자인 미리보기</strong> — 가짜 데이터 기반. '
+        '실제 운영 화면은 <a href="./" style="color:#92400e;font-weight:500">메인</a>에서 확인.'
+        '</div>'
+    )
+    body_parts.insert(0, demo_banner)
+
+    scripts = "\n".join(_plotly_script(c) for c in chart_datas)
+    html = HTML_TEMPLATE.format(
+        updated_at=datetime.now(KST).strftime("%Y-%m-%d %H:%M"),
+        body="\n".join(body_parts),
+        scripts=scripts,
+    )
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    logger.info("데모 페이지 생성: %s (%d bytes)", out, out.stat().st_size)
