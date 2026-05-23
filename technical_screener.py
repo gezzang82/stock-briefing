@@ -241,57 +241,65 @@ def compute_supply_demand(code: str, ohlcv: list[dict]) -> dict:
     }
 
 
-def score_candidate(ind: dict, supply: dict) -> tuple[float, list[str]]:
-    """
-    수급/거래대금 기반 점수 (총점 100점):
-      - 외국인 수급 40%
-      - 기관 수급 30%
-      - 거래대금 증가율 30%
+DEFAULT_WEIGHTS = {"foreign": 40, "instit": 30, "value": 30}
 
-    기존 기술 시그널(MA/RSI/돌파)은 표시 라벨로만 포함, 점수에 미반영.
+
+def score_candidate(ind: dict, supply: dict,
+                    weights: dict | None = None) -> tuple[float, list[str]]:
     """
+    수급/거래대금 기반 점수. weights로 시장 상태(regime)별 가중치 조정.
+
+    weights 합 100 (기본 외국인 40 / 기관 30 / 거래대금 30).
+    각 항목의 베이스 점수에 weights[항목]/기본가중치 비율을 곱해 환산.
+
+    기술 시그널(MA/RSI/돌파)은 표시 라벨로만 포함, 점수에 미반영.
+    """
+    w = weights or DEFAULT_WEIGHTS
+    fr_mult = w["foreign"] / DEFAULT_WEIGHTS["foreign"]
+    in_mult = w["instit"] / DEFAULT_WEIGHTS["instit"]
+    vr_mult = w["value"] / DEFAULT_WEIGHTS["value"]
+
     score = 0.0
     signals: list[str] = []
 
-    # ========== 외국인 (max 40) ==========
+    # ========== 외국인 (베이스 max 40 × multiplier) ==========
     fr_pct = supply["foreign_ratio"] * 100  # 거래대금 대비 비중 %
     if fr_pct >= 5.0:
-        score += 40; signals.append(f"외국인 강매수 {fr_pct:+.1f}%")
+        score += 40 * fr_mult; signals.append(f"외국인 강매수 {fr_pct:+.1f}%")
     elif fr_pct >= 2.0:
-        score += 30; signals.append(f"외국인 순매수 {fr_pct:+.1f}%")
+        score += 30 * fr_mult; signals.append(f"외국인 순매수 {fr_pct:+.1f}%")
     elif fr_pct >= 0.5:
-        score += 20
+        score += 20 * fr_mult
     elif fr_pct > 0:
-        score += 10
+        score += 10 * fr_mult
     elif fr_pct <= -2.0:
         signals.append(f"외국인 순매도 {fr_pct:+.1f}%")
-    # 0% ~ -2%는 0점
 
-    # ========== 기관 (max 30) ==========
+    # ========== 기관 (베이스 max 30 × multiplier) ==========
     in_pct = supply["instit_ratio"] * 100
     if in_pct >= 5.0:
-        score += 30; signals.append(f"기관 강매수 {in_pct:+.1f}%")
+        score += 30 * in_mult; signals.append(f"기관 강매수 {in_pct:+.1f}%")
     elif in_pct >= 2.0:
-        score += 22; signals.append(f"기관 순매수 {in_pct:+.1f}%")
+        score += 22 * in_mult; signals.append(f"기관 순매수 {in_pct:+.1f}%")
     elif in_pct >= 0.5:
-        score += 15
+        score += 15 * in_mult
     elif in_pct > 0:
-        score += 7
+        score += 7 * in_mult
     elif in_pct <= -2.0:
         signals.append(f"기관 순매도 {in_pct:+.1f}%")
 
-    # ========== 거래대금 증가율 (max 30) ==========
+    # ========== 거래대금 증가율 (베이스 max 30 × multiplier) ==========
     vr = supply["value_ratio"]
     if vr >= 3.0:
-        score += 30; signals.append(f"거래대금 폭증 {vr:.1f}x")
+        score += 30 * vr_mult; signals.append(f"거래대금 폭증 {vr:.1f}x")
     elif vr >= 2.0:
-        score += 25; signals.append(f"거래대금 급증 {vr:.1f}x")
+        score += 25 * vr_mult; signals.append(f"거래대금 급증 {vr:.1f}x")
     elif vr >= 1.5:
-        score += 20; signals.append(f"거래대금 +{(vr-1)*100:.0f}%")
+        score += 20 * vr_mult; signals.append(f"거래대금 +{(vr-1)*100:.0f}%")
     elif vr >= 1.2:
-        score += 15
+        score += 15 * vr_mult
     elif vr >= 1.0:
-        score += 10
+        score += 10 * vr_mult
 
     # ========== 프로그램 매매 (참고 라벨, 점수 미반영) ==========
     prog_billion = supply["program_net_won"] / 1e8
@@ -318,9 +326,16 @@ def score_candidate(ind: dict, supply: dict) -> tuple[float, list[str]]:
 
 # ============== 메인 ==============
 
-def screen_candidates(top_n: int = 20) -> list[dict]:
-    """기술적 스크리닝 전체 파이프라인"""
-    logger.info("기술적 스크리닝 시작...")
+def screen_candidates(top_n: int = 20,
+                      weights: dict | None = None) -> list[dict]:
+    """기술적 스크리닝 전체 파이프라인. weights로 regime 가중치 적용."""
+    if weights:
+        logger.info(
+            "기술적 스크리닝 시작 (외국인 %d / 기관 %d / 거래대금 %d)",
+            weights["foreign"], weights["instit"], weights["value"],
+        )
+    else:
+        logger.info("기술적 스크리닝 시작 (기본 가중치)")
 
     volume_top = get_volume_ranking(count=30)
     if not volume_top:
@@ -337,8 +352,8 @@ def screen_candidates(top_n: int = 20) -> list[dict]:
         ind = compute_indicators(ohlcv)
         if not ind:
             continue
-        supply = compute_supply_demand(v["code"], ohlcv)  # KIS 호출 2건 + sleep 내부
-        score, signals = score_candidate(ind, supply)
+        supply = compute_supply_demand(v["code"], ohlcv)
+        score, signals = score_candidate(ind, supply, weights=weights)
         candidates.append({
             **v, "indicators": ind, "supply": supply,
             "score": score, "signals": signals,

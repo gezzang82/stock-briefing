@@ -117,24 +117,40 @@ def run_daily_briefing():
     logger.info("뉴스 수집 중...")
     news_text = fetch_financial_news(max_articles=40)
 
-    # 4a. 기술적 스크리닝 (실패해도 fallback)
+    # 4a-pre. 시장 상태 판단 (regime별 가중치 결정)
+    regime_text = ""
+    weights = None
+    try:
+        from market_regime import detect_regime, get_weights_for_regime, format_regime_for_prompt
+        regime_info = detect_regime()
+        weights = get_weights_for_regime(regime_info["regime"])
+        regime_text = format_regime_for_prompt(regime_info)
+    except Exception as e:
+        logger.warning("시장 상태 판단 실패 — 기본 가중치: %s", e)
+        regime_info = None
+
+    # 4a. 기술적 스크리닝 (regime 가중치 적용)
     try:
         from technical_screener import screen_candidates, format_for_prompt
-        tech_candidates = screen_candidates(top_n=20)
+        tech_candidates = screen_candidates(top_n=20, weights=weights)
         tech_text = format_for_prompt(tech_candidates)
         logger.info("기술적 후보 %d개를 AI에 전달", len(tech_candidates))
     except Exception as e:
         logger.warning("기술적 스크리닝 실패 — 뉴스 기반으로 폴백: %s", e)
         tech_text = ""
 
-    # 4b. AI 분석 (뉴스 + 기술적 후보 + 최근 7일 회피)
+    # 4b. AI 분석 (시장 상태 + 뉴스 + 기술 후보 + 회피)
     recent = get_recent_recommended_stocks(days=7)
     logger.info("최근 7일 추천 이력: %d개 종목 (회피 힌트로 전달)", len(recent))
     analysis = analyze_and_recommend(
         news_text, kospi_display, kosdaq_display,
         recent_excluded=recent,
         tech_candidates_text=tech_text,
+        regime_text=regime_text,
     )
+    # 결과에 regime 정보 첨부 (Discord/HTML에서 사용)
+    if regime_info:
+        analysis["regime_info"] = regime_info
 
     # 5. 종목 검증 (코드 유효성/중복/이름 정정) — 시세 조회까지 한 번에
     cleaned_recs, price_map = _validate_and_clean_recommendations(analysis["recommendations"])

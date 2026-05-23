@@ -20,6 +20,9 @@ ANALYSIS_PROMPT = """\
 KOSPI: {kospi}
 KOSDAQ: {kosdaq}
 
+=== 시장 상태 (regime) ===
+{regime_text}
+
 === 최신 금융 뉴스 ===
 {news}
 
@@ -100,6 +103,7 @@ def analyze_and_recommend(
     news_text: str, kospi: str, kosdaq: str,
     recent_excluded: list[dict] | None = None,
     tech_candidates_text: str = "",
+    regime_text: str = "",
 ) -> dict:
     """
     뉴스 + 시장지표 + 기술적 스크리닝 후보를 종합해 추천 종목 반환.
@@ -118,6 +122,7 @@ def analyze_and_recommend(
         news=news_text,
         recent_excluded=_format_recent_excluded(recent_excluded),
         tech_candidates=tech_candidates_text or "(기술적 스크리닝 결과 없음 — 뉴스 기반으로만 선정)",
+        regime_text=regime_text or "(시장 상태 데이터 없음 — 기본 균형 전략)",
     )
 
     logger.info("AI 분석 시작...")

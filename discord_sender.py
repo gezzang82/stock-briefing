@@ -85,6 +85,15 @@ def send_briefing(
         if is_premarket else ""
     )
 
+    # 시장 상태 라인 (regime)
+    regime_line = ""
+    if analysis.get("regime_info"):
+        try:
+            from market_regime import format_regime_for_discord
+            regime_line = f"🌐 **시장 상태**: {format_regime_for_discord(analysis['regime_info'])}\n\n"
+        except Exception:
+            pass
+
     # 1) 메인 임베드: 시장 요약
     main_embed = {
         "title": f"📈 주식 AI 브리핑 [{today}]",
@@ -93,6 +102,7 @@ def send_briefing(
         "description": (
             f"{timing_note}"
             f"**{kospi_str}**\n**{kosdaq_str}**\n\n"
+            f"{regime_line}"
             f"📰 {analysis.get('market_summary', '')}\n\n"
             f"🔑 **핵심 테마**: {themes}\n\n"
             f"⚠️ **리스크**: {analysis.get('risk_factors', '')}\n\n"

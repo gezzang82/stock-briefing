@@ -197,6 +197,59 @@ class KISClient:
             logger.debug("종목명 조회 오류 [%s]: %s", code, e)
             return None
 
+    def get_index_daily(self, market: str = "KOSPI", days: int = 60) -> list[dict]:
+        """
+        지수 일봉 OHLCV (최신이 리스트 마지막).
+        endpoint: /uapi/domestic-stock/v1/quotations/inquire-index-daily-price
+        tr_id: FHPUP02120000 (지수 일자별 시세)
+        """
+        from datetime import date, timedelta
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-daily-price"
+        code = INDEX_CODES.get(market.upper(), "0001")
+        end = date.today().strftime("%Y%m%d")
+        start = (date.today() - timedelta(days=int(days * 1.6))).strftime("%Y%m%d")
+        params = {
+            "FID_PERIOD_DIV_CODE": "D",
+            "FID_COND_MRKT_DIV_CODE": "U",
+            "FID_INPUT_ISCD": code,
+            "FID_INPUT_DATE_1": start,
+            "FID_INPUT_DATE_2": end,
+        }
+        try:
+            resp = requests.get(url, headers=self._headers("FHPUP02120000"),
+                                params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                logger.warning("지수 일봉 실패 [%s]: %s", market, data.get("msg1"))
+                return []
+            # output2: 일봉 배열
+            rows = data.get("output2") or data.get("output") or []
+            bars = []
+            for r in rows:
+                if not r.get("bstp_nmix_prpr") and not r.get("bstp_nmix_clpr"):
+                    continue
+                try:
+                    close = float(r.get("bstp_nmix_prpr") or r.get("bstp_nmix_clpr") or 0)
+                    if close <= 0:
+                        continue
+                    bars.append({
+                        "date": r.get("stck_bsop_date", ""),
+                        "open": float(r.get("bstp_nmix_oprc") or close),
+                        "high": float(r.get("bstp_nmix_hgpr") or close),
+                        "low": float(r.get("bstp_nmix_lwpr") or close),
+                        "close": close,
+                        "volume": int(r.get("acml_vol", 0) or 0),
+                        "trade_value": int(r.get("acml_tr_pbmn", 0) or 0),
+                    })
+                except (ValueError, TypeError):
+                    continue
+            bars.sort(key=lambda x: x["date"])
+            return bars[-days:]
+        except Exception as e:
+            logger.error("지수 일봉 조회 오류 [%s]: %s", market, e)
+            return []
+
     def get_investor_trend(self, code: str, days: int = 10) -> list[dict]:
         """
         일별 외국인/기관/개인 매매동향 (최근 N일).
