@@ -28,116 +28,239 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <style>
   :root {{
-    --bg: #f7f9fc;
+    --bg: #f6f7f9;
     --card: #ffffff;
-    --text: #2c3e50;
-    --muted: #7f8c8d;
-    --border: #ecf0f1;
-    --up: #27ae60;
-    --down: #e74c3c;
+    --text: #1d2433;
+    --muted: #8b95a1;
+    --border: #eef0f3;
+    --separator: #e5e8ec;
+    --pill-bg: #f1f3f5;
+    --tab-active: #1d2433;
+    --link: #2563eb;
+    --up: #16a34a;
+    --down: #dc2626;
   }}
   * {{ box-sizing: border-box; }}
   body {{
     font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
-                 'Noto Sans KR', 'Helvetica Neue', sans-serif;
-    max-width: 900px; margin: 0 auto; padding: 1rem;
+                 'Pretendard', 'Noto Sans KR', 'Helvetica Neue', sans-serif;
+    max-width: 760px; margin: 0 auto; padding: 1.2rem 1rem;
     background: var(--bg); color: var(--text);
     line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;  /* 가로 스크롤 방지 (잘못된 요소 폭 보호) */
   }}
-  h1 {{ margin: 0 0 0.3rem; font-size: 1.5rem; }}
-  h3 {{ margin: 1.5rem 0 0.5rem; font-size: 1.1rem; }}
-  .meta {{ color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; }}
+  /* ── Header ── */
+  h1 {{ margin: 0 0 0.4rem; font-size: 1.45rem; font-weight: 700; letter-spacing: -0.01em; }}
+  .meta {{
+    color: var(--muted); font-size: 0.82rem;
+    margin: 0 0 1.5rem; padding: 0 0 0 1.1rem;
+  }}
+  .meta li {{ margin: 0.1rem 0; }}
+  .workflow-link {{ color: var(--link); text-decoration: none; font-weight: 500; }}
+  .workflow-link:hover {{ text-decoration: underline; }}
+  /* ── Filter bar (year + month tabs) ── */
+  .filter-bar {{
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 1rem;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }}
+  .filter-bar::-webkit-scrollbar {{ display: none; }}
+  .year-selector {{
+    background: white; border: 1px solid var(--border);
+    padding: 0.5rem 0.9rem; border-radius: 999px;
+    font-size: 0.88rem; font-weight: 500; color: var(--text);
+    cursor: pointer; font-family: inherit;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'><path fill='%231d2433' d='M7 10l5 5 5-5z'/></svg>");
+    background-repeat: no-repeat; background-position: right 0.7rem center;
+    padding-right: 2rem;
+  }}
+  .month-tab {{
+    background: transparent; border: none;
+    padding: 0.5rem 0.95rem; border-radius: 999px;
+    font-size: 0.88rem; font-weight: 500; color: var(--muted);
+    cursor: pointer; font-family: inherit;
+    white-space: nowrap; transition: all 0.15s;
+  }}
+  .month-tab:hover {{ color: var(--text); }}
+  .month-tab.active {{
+    background: var(--tab-active); color: white; font-weight: 600;
+  }}
+  /* ── Month card ── */
   .month-card {{
-    background: var(--card); border-radius: 14px;
-    padding: 1.2rem; margin-bottom: 1.2rem;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    background: var(--card); border-radius: 16px;
+    padding: 1.3rem 1.2rem; margin-bottom: 1.2rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
   }}
-  .month-title {{ font-size: 1.15rem; margin: 0 0 0.6rem; font-weight: 600; }}
-  .stats-row {{
-    display: flex; flex-wrap: wrap; gap: 0.5rem;
-    margin-bottom: 1rem; font-size: 0.85rem;
+  .month-card[hidden] {{ display: none; }}
+  .month-title {{ font-size: 1.4rem; font-weight: 700; margin: 0 0 0.25rem; }}
+  .month-subtitle {{ font-size: 0.82rem; color: var(--muted); margin: 0 0 1rem; }}
+  .stats-grid {{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
+    margin-bottom: 0.5rem;
   }}
-  .stat {{
-    background: var(--border); padding: 0.4rem 0.7rem; border-radius: 8px;
-    color: var(--muted);
+  .stats-grid.cols-2 {{ grid-template-columns: repeat(2, 1fr); }}
+  .stat-cell {{
+    background: var(--pill-bg); border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.4rem; font-size: 0.82rem; color: var(--muted);
   }}
-  .stat strong {{ color: var(--text); }}
-  .chart {{ width: 100%; height: 380px; min-height: 320px; }}
+  .stat-cell strong {{ color: var(--text); font-weight: 700; font-size: 0.9rem; }}
+  .stat-cell strong.up {{ color: var(--up); }}
+  .stat-cell strong.down {{ color: var(--down); }}
+  .chart {{
+    width: 100%; height: 340px; min-height: 300px;
+    margin-top: 0.5rem; overflow: hidden;
+  }}
+  .chart .main-svg {{ background: transparent !important; }}
+  .chart-legend {{
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 0.4rem 0.6rem; margin-top: 0.5rem;
+    font-size: 0.7rem; color: var(--muted);
+  }}
+  .legend-item {{ display: flex; align-items: center; gap: 0.35rem; }}
+  .legend-dot {{
+    width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+  }}
+  @media (max-width: 480px) {{
+    .chart-legend {{
+      grid-template-columns: repeat(2, 1fr) !important;
+      font-size: 0.68rem; gap: 0.35rem 0.4rem;
+    }}
+  }}
+  /* ── Table headings ── */
+  h3.section-title {{
+    margin: 1.8rem 0 0.25rem; font-size: 1.05rem; font-weight: 700;
+  }}
+  h3.section-title .count {{ color: var(--muted); font-size: 0.85rem; font-weight: 500; }}
+  .section-desc {{ font-size: 0.78rem; color: var(--muted); margin: 0 0 0.7rem; }}
+  /* ── Tables ── */
   table {{
     width: 100%; border-collapse: collapse;
     margin-top: 0.5rem; font-size: 0.85rem;
-    background: var(--card); border-radius: 10px; overflow: hidden;
+    background: var(--card); border-radius: 12px; overflow: hidden;
+    table-layout: fixed;
   }}
-  th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }}
-  th {{ background: #f8f9fa; font-weight: 600; font-size: 0.8rem; color: var(--muted); }}
-  td:last-child, th:last-child {{ text-align: right; }}
-  td a {{ color: #2980b9; text-decoration: none; }}
+  table col.col-date {{ width: 68px; }}
+  table col.col-stock {{ width: auto; }}
+  table col.col-ret {{ width: 72px; }}
+  table col.col-range {{ width: 70px; }}
+  table col.sector-name {{ width: auto; }}
+  table col.sector-count {{ width: 80px; }}
+  table col.sector-ret {{ width: 100px; }}
+  th, td {{
+    padding: 12px 10px; border-bottom: 1px solid var(--border);
+    text-align: left; vertical-align: middle;
+  }}
+  th {{
+    background: white; font-weight: 500; font-size: 0.78rem;
+    color: var(--muted); border-bottom: 1px solid var(--separator);
+  }}
+  /* Vertical separators between columns */
+  th:not(:last-child), td:not(:last-child) {{
+    border-right: 1px solid var(--border);
+  }}
+  th.align-right, td.align-right {{ text-align: right; }}
+  td a {{ color: var(--link); text-decoration: none; }}
   td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
-  td a:hover {{ color: #1c5980; }}
-  td.mfe-mae {{ font-size: 0.78rem; white-space: nowrap; line-height: 1.35; }}
+  td a:hover {{ color: #1d4ed8; }}
+  td.mfe-mae {{ font-size: 0.78rem; white-space: nowrap; line-height: 1.35; text-align: right; }}
   td.mfe-mae .row {{ display: block; }}
-  td.stock-col {{ padding: 10px; }}
-  td.amount-col {{ vertical-align: middle; font-weight: 600; }}
+  td.stock-col {{ padding: 12px 10px; }}
+  td.amount-col {{ font-weight: 600; text-align: right; }}
   /* Stock cell: logo + (sector tag / stock name) */
   .stock-link {{ display: block; text-decoration: none; color: inherit; }}
   .stock-row {{ display: flex; align-items: center; gap: 10px; }}
   .stock-info {{ display: flex; flex-direction: column; gap: 3px; min-width: 0; }}
   .stock-info .stock-name {{
-    color: var(--text); font-weight: 500;
+    color: var(--text); font-weight: 500; font-size: 0.88rem;
     border-bottom: 1px dashed transparent;
   }}
-  .stock-link:hover .stock-name {{
-    color: #2980b9; border-bottom-color: #2980b9;
-  }}
+  .stock-link:hover .stock-name {{ color: var(--link); }}
   .sector-tag {{
-    display: inline-block; font-size: 0.6rem;
-    padding: 1px 7px; border-radius: 8px;
+    display: inline-block; font-size: 0.62rem;
+    padding: 1px 7px; border-radius: 6px;
     line-height: 1.4; font-weight: 700;
     letter-spacing: -0.01em;
-    /* color and background set inline per sector */
   }}
   .stock-logo, .stock-logo-fb {{
-    display: inline-block; width: 36px; height: 36px;
-    vertical-align: middle;
-    border-radius: 50%; overflow: hidden;
+    display: inline-block; width: 32px; height: 32px;
+    vertical-align: middle; border-radius: 50%; overflow: hidden;
     flex-shrink: 0;
   }}
   .stock-logo {{ background: white; border: 1px solid var(--border); }}
   .stock-logo img {{ width: 100%; height: 100%; object-fit: contain; display: block; }}
   .stock-logo-fb {{
-    color: white; font-size: 14px; font-weight: 700;
-    text-align: center; line-height: 36px;
+    color: white; font-size: 12px; font-weight: 700;
+    text-align: center; line-height: 32px;
   }}
+  /* Show more */
   .show-more-wrap {{ text-align: center; margin-top: 0.8rem; }}
   .show-more-btn {{
     background: white; border: 1px solid var(--border); color: var(--text);
-    padding: 0.5rem 1.4rem; border-radius: 8px; cursor: pointer;
+    padding: 0.55rem 1.4rem; border-radius: 10px; cursor: pointer;
     font-size: 0.85rem; font-family: inherit;
   }}
-  .show-more-btn:hover {{ background: #f0f3f5; border-color: #d0d7de; }}
+  .show-more-btn:hover {{ background: #f0f3f5; }}
+  /* Empty */
   .empty {{
-    color: var(--muted); padding: 2rem; text-align: center;
-    font-size: 0.9rem;
+    color: var(--muted); padding: 2.5rem 1rem; text-align: center;
+    font-size: 0.88rem; line-height: 1.6;
   }}
+  /* Up/Down colors */
   .up {{ color: var(--up); font-weight: 600; }}
   .down {{ color: var(--down); font-weight: 600; }}
   .table-wrap {{ overflow-x: auto; }}
+  /* Responsive */
   @media (max-width: 480px) {{
-    body {{ padding: 0.7rem; }}
-    h1 {{ font-size: 1.3rem; }}
-    .month-card {{ padding: 1rem; }}
-    .chart {{ height: 340px; }}
+    body {{ padding: 0.9rem 0.7rem; }}
+    h1 {{ font-size: 1.15rem; }}
+    .meta {{ font-size: 0.78rem; }}
+    .month-card {{ padding: 1.1rem 0.9rem; }}
+    .month-title {{ font-size: 1.25rem; }}
+    .chart {{ height: 280px; }}
+    .stats-grid {{ gap: 0.4rem; }}
+    .stat-cell {{
+      padding: 0.5rem 0.55rem; font-size: 0.7rem;
+      flex-direction: column; align-items: flex-start; gap: 0.15rem;
+    }}
+    .stat-cell strong {{ font-size: 0.92rem; }}
+    /* 표: 4컬럼 모바일 압축 — 세로 구분선 제거 (가로 공간 확보) */
+    th:not(:last-child), td:not(:last-child) {{ border-right: none !important; }}
+    table {{ font-size: 0.76rem; table-layout: fixed !important; }}
+    /* nth-child로 명시 (colgroup보다 신뢰성↑) */
+    table th:nth-child(1), table td:nth-child(1) {{ width: 50px !important; }}
+    table th:nth-child(3), table td:nth-child(3) {{ width: 56px !important; }}
+    table th:nth-child(4), table td:nth-child(4) {{ width: 56px !important; }}
+    th, td {{ padding: 9px 3px; overflow: hidden; }}
+    .stock-info {{ overflow: hidden; }}
+    .stock-info .stock-name {{
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }}
+    th {{ font-size: 0.68rem; }}
+    td.stock-col {{ padding: 9px 5px; }}
+    .stock-logo, .stock-logo-fb {{ width: 26px; height: 26px; }}
+    .stock-logo-fb {{ line-height: 26px; font-size: 10px; }}
+    .stock-row {{ gap: 6px; }}
+    .stock-info {{ gap: 2px; }}
+    .stock-info .stock-name {{ font-size: 0.8rem; }}
+    .sector-tag {{ font-size: 0.58rem; padding: 1px 5px; }}
+    td.mfe-mae {{ font-size: 0.72rem; }}
+    td.amount-col {{ font-size: 0.82rem; }}
+    /* 추천일 column nowrap + 작게 */
+    td:first-child, th:first-child {{ white-space: nowrap; font-size: 0.7rem; }}
   }}
 </style>
 </head>
 <body>
   <h1>📊 주식 AI 백테스트 리포트</h1>
-  <p class="meta">
-    최종 업데이트: {updated_at} KST<br>
-    평가 기준: 추천일 +14일 시점 수익률 (8개 티어)<br>
-    <a href="./workflow.html" style="color:#3498db;text-decoration:none;border-bottom:1px dashed #3498db">
-    🔧 시스템 워크플로우 보기 →</a>
-  </p>
+  <ul class="meta">
+    <li>최종 업데이트 : {updated_at} KST</li>
+    <li>평가 기준 : 추천일 +14일 시점 수익률 (8개 티어)</li>
+    <li><a href="./workflow.html" class="workflow-link">🔧 시스템 워크플로우 보기 →</a></li>
+  </ul>
 
 {body}
 
@@ -148,6 +271,33 @@ function logoFail(img) {{
   span.style.background = img.dataset.bg;
   span.textContent = img.dataset.letter;
   img.parentElement.replaceChild(span, img);
+}}
+function selectMonth(btn) {{
+  var month = btn.dataset.month;
+  var year = btn.dataset.year;
+  document.querySelectorAll('.month-tab').forEach(function(b) {{
+    b.classList.toggle('active', b === btn);
+  }});
+  document.querySelectorAll('.month-card').forEach(function(card) {{
+    var match = (!month || card.dataset.month === year + '-' + month);
+    card.hidden = !match;
+  }});
+}}
+function selectYear(sel) {{
+  var year = sel.value;
+  document.querySelectorAll('.month-tab').forEach(function(b) {{
+    b.dataset.year = year;
+    b.classList.remove('active');
+  }});
+  document.querySelectorAll('.month-card').forEach(function(card) {{
+    card.hidden = !card.dataset.month.startsWith(year + '-');
+  }});
+  // 해당 연도 첫 번째 탭 active
+  var firstTab = document.querySelector('.month-tab');
+  if (firstTab) {{
+    firstTab.classList.add('active');
+    selectMonth(firstTab);
+  }}
 }}
 function showMore(btn, step) {{
   var wrap = btn.parentElement;
@@ -305,15 +455,20 @@ def _stock_table(items: list[dict], title: str,
         )
 
     return (
-        f"<h3>{title} <span style='font-size:0.8rem;color:var(--muted);font-weight:normal'>"
-        f"(총 {total}개)</span></h3>"
-        f'<p style="font-size:0.8rem;color:var(--muted);margin:0 0 0.3rem">'
-        f"수익률 높은 순 · 종목명을 누르면 네이버 증권에서 열립니다 · "
-        f"<span class='up'>▲</span>최고상승(MFE) / <span class='down'>▼</span>최대하락(MAE)</p>"
+        f'<h3 class="section-title">{title} <span class="count">(총 {total}개)</span></h3>'
+        f'<p class="section-desc">'
+        f"수익률 높은 순 · 종목명을 누르면 네이버 증권에서 열립니다.<br>"
+        f"<span class='up'>▲</span> 최고상승 (MFE) / <span class='down'>▼</span> 최대하락 (MAE)"
+        f"</p>"
         f'<div class="table-wrap"><table>'
+        f"<colgroup>"
+        f'<col class="col-date"><col class="col-stock">'
+        f'<col class="col-ret"><col class="col-range">'
+        f"</colgroup>"
         f"<thead><tr>"
         f"<th>추천일</th><th>종목</th>"
-        f"<th>현재 수익률</th><th>변동폭</th>"
+        f'<th class="align-right">현재 수익률</th>'
+        f'<th class="align-right">변동폭</th>'
         f"</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
@@ -331,49 +486,58 @@ def _sector_table(sectors: list[dict]) -> str:
         rows.append(
             f"<tr>"
             f"<td>{s['sector']}</td>"
-            f"<td>{s['total']}</td>"
-            f'<td class="{cls}">{sign}{abs(s["avg_return"]):.2f}%</td>'
+            f'<td class="align-right">{s["total"]}</td>'
+            f'<td class="align-right {cls}">{sign}{abs(s["avg_return"]):.2f}%</td>'
             f"</tr>"
         )
     return (
-        f"<h3>섹터별 성과 (최근 30일)</h3>"
+        f'<h3 class="section-title">섹터별 성과 <span class="count">(최근 30일)</span></h3>'
         f'<div class="table-wrap"><table>'
-        f"<thead><tr><th>섹터</th><th>종목 수</th><th>평균 수익률</th></tr></thead>"
+        f"<colgroup>"
+        f'<col class="sector-name"><col class="sector-count"><col class="sector-ret">'
+        f"</colgroup>"
+        f"<thead><tr><th>섹터</th>"
+        f'<th class="align-right">종목 수</th>'
+        f'<th class="align-right">평균 수익률</th></tr></thead>'
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
     )
 
 
-def _month_card(stats: dict) -> tuple[str, dict | None]:
-    """월별 카드 HTML + 차트 데이터(없으면 None)"""
-    month = stats["month"]
+def _month_card(stats: dict, hidden: bool = False) -> tuple[str, dict | None]:
+    """월별 카드 HTML + 차트 데이터(없으면 None). hidden=True이면 hidden 속성 부여."""
+    month = stats["month"]  # YYYY-MM
+    title = month.replace("-", ". ")  # "2026. 05"
     matured = stats["matured_count"]
+    in_progress = stats.get("in_progress_count", 0)
 
-    badges = []
-    if matured:
-        cls = "up" if stats["avg_return"] >= 0 else "down"
-        badges += [
-            f'<div class="stat">만기 <strong>{matured}</strong>개</div>',
-            f'<div class="stat">평균 <strong class="{cls}">{stats["avg_return"]:+.2f}%</strong></div>',
-            f'<div class="stat">승률 <strong>{stats["win_rate"]:.0f}%</strong></div>',
-            f'<div class="stat">강승(≥5%) <strong>{stats["strong_win_rate"]:.0f}%</strong></div>',
-        ]
-        if stats.get("avg_mfe", 0) or stats.get("avg_mae", 0):
-            badges += [
-                f'<div class="stat">평균 MFE <strong class="up">▲{stats["avg_mfe"]:.2f}%</strong></div>',
-                f'<div class="stat">평균 MAE <strong class="down">▼{abs(stats["avg_mae"]):.2f}%</strong></div>',
-            ]
-    if stats["in_progress_count"]:
-        badges.append(
-            f'<div class="stat">진행 중 {stats["in_progress_count"]}개</div>'
-        )
-    if not badges:
-        badges.append(f'<div class="stat">추천 없음</div>')
+    subtitle = f"진행 총 {in_progress}개 / 만기 {matured}개"
 
     chart_id = f"chart_{month.replace('-', '_')}"
     chart_data = None
+    chart_html = ""
+    legend_html = ""
+    stats_html = ""
 
     if matured > 0:
+        cls = "up" if stats["avg_return"] >= 0 else "down"
+        sign = "+" if stats["avg_return"] >= 0 else ""
+        # 1행: 평균 / 승률 / 강승 (라벨 짧게)
+        row1 = (
+            f'<div class="stat-cell">평균 <strong class="{cls}">{sign}{stats["avg_return"]:.2f}%</strong></div>'
+            f'<div class="stat-cell">승률 <strong>{stats["win_rate"]:.0f}%</strong></div>'
+            f'<div class="stat-cell">강승 <strong>{stats["strong_win_rate"]:.0f}%</strong></div>'
+        )
+        stats_html = f'<div class="stats-grid">{row1}</div>'
+        # 2행: MFE / MAE (있을 때만)
+        if stats.get("avg_mfe", 0) or stats.get("avg_mae", 0):
+            row2 = (
+                f'<div class="stat-cell">평균 MFE <strong class="up">▲{stats["avg_mfe"]:.2f}%</strong></div>'
+                f'<div class="stat-cell">평균 MAE <strong class="down">▼{abs(stats["avg_mae"]):.2f}%</strong></div>'
+            )
+            stats_html += f'<div class="stats-grid cols-2">{row2}</div>'
+
+        # 차트 데이터
         labels, values, colors = [], [], []
         for i, c in enumerate(stats["tier_counts"]):
             if c > 0:
@@ -382,42 +546,94 @@ def _month_card(stats: dict) -> tuple[str, dict | None]:
                 colors.append(TIER_COLORS[i])
         chart_data = {"id": chart_id, "labels": labels, "values": values, "colors": colors}
         chart_html = f'<div id="{chart_id}" class="chart"></div>'
+
+        # 차트 아래 8 tier 범례 (전체 8개 표시 — 0건이어도)
+        legend_items = []
+        for i, label in enumerate(TIER_LABELS):
+            legend_items.append(
+                f'<div class="legend-item">'
+                f'<span class="legend-dot" style="background:{TIER_COLORS[i]}"></span>'
+                f'{label}</div>'
+            )
+        legend_html = f'<div class="chart-legend">{"".join(legend_items)}</div>'
     else:
         chart_html = (
             '<div class="empty">아직 만기 도달 종목 없음<br>'
             "(추천일로부터 14일 경과 시 평가)</div>"
         )
 
+    hidden_attr = ' hidden' if hidden else ''
     html = (
-        f'<div class="month-card">'
-        f'<div class="month-title">{month}</div>'
-        f'<div class="stats-row">{"".join(badges)}</div>'
-        f"{chart_html}"
-        f"</div>"
+        f'<div class="month-card" data-month="{month}"{hidden_attr}>'
+        f'<div class="month-title">{title}</div>'
+        f'<div class="month-subtitle">{subtitle}</div>'
+        f'{stats_html}'
+        f'{chart_html}'
+        f'{legend_html}'
+        f'</div>'
     )
     return html, chart_data
 
 
+def _pick_default_month(monthly_sorted: list[dict]) -> str:
+    """기본 선택 월: 가장 최신 '만기 도달 데이터 있는' 월. 없으면 최신 월."""
+    for m in monthly_sorted:
+        if m.get("matured_count", 0) > 0:
+            return m["month"]
+    return monthly_sorted[0]["month"] if monthly_sorted else ""
+
+
+def _filter_bar(monthly_sorted: list[dict], default_month: str) -> str:
+    """연도 selector + 월 탭. default_month가 active."""
+    if not monthly_sorted:
+        return ""
+    years = sorted({m["month"][:4] for m in monthly_sorted}, reverse=True)
+    default_year = default_month[:4]
+    default_mm = default_month[5:7]
+    months_in_year = sorted(
+        {m["month"][5:7] for m in monthly_sorted if m["month"][:4] == default_year},
+        reverse=True,
+    )
+    year_options = "".join(
+        f'<option value="{y}"{" selected" if y == default_year else ""}>{y}년</option>'
+        for y in years
+    )
+    month_tabs = "".join(
+        f'<button class="month-tab{" active" if m == default_mm else ""}" '
+        f'data-month="{m}" data-year="{default_year}" '
+        f'onclick="selectMonth(this)">{int(m)}월</button>'
+        for m in months_in_year
+    )
+    return (
+        f'<div class="filter-bar">'
+        f'<select class="year-selector" onchange="selectYear(this)">{year_options}</select>'
+        f'{month_tabs}'
+        f'</div>'
+    )
+
+
 def _plotly_script(chart: dict) -> str:
-    """Plotly 도넛 차트 JS 코드"""
+    """Plotly 도넛 차트 JS 코드. HTML 범례를 따로 그리므로 차트 자체는 legend off."""
     return f"""
 Plotly.newPlot({json.dumps(chart['id'])}, [{{
   type: 'pie',
   labels: {json.dumps(chart['labels'], ensure_ascii=False)},
   values: {json.dumps(chart['values'])},
   marker: {{colors: {json.dumps(chart['colors'])}, line: {{color: 'white', width: 2}}}},
-  textinfo: 'label+percent',
-  textposition: 'outside',
+  textinfo: 'percent',
+  textposition: 'inside',
+  insidetextorientation: 'horizontal',
+  insidetextfont: {{size: 11, color: 'white'}},
   hovertemplate: '<b>%{{label}}</b><br>%{{value}}종목 (%{{percent}})<extra></extra>',
-  hole: 0.45,
-  sort: false
+  hole: 0.5,
+  sort: false,
+  automargin: true
 }}], {{
-  showlegend: true,
-  legend: {{orientation: 'h', y: -0.05, font: {{size: 11}}}},
-  margin: {{t: 10, b: 30, l: 10, r: 10}},
+  showlegend: false,
+  margin: {{t: 10, b: 10, l: 10, r: 10}},
   paper_bgcolor: 'rgba(0,0,0,0)',
   plot_bgcolor: 'rgba(0,0,0,0)',
-  font: {{family: 'inherit'}}
+  font: {{family: 'inherit', size: 11}}
 }}, {{responsive: true, displayModeBar: false}});
 """
 
@@ -438,8 +654,11 @@ def generate_html_report(
     if not monthly_sorted:
         body_parts.append('<div class="empty">아직 추천 데이터 없음</div>')
     else:
+        # 기본 선택: 만기 도달 데이터 있는 가장 최신 월
+        default_month = _pick_default_month(monthly_sorted)
+        body_parts.append(_filter_bar(monthly_sorted, default_month))
         for ms in monthly_sorted:
-            html, chart = _month_card(ms)
+            html, chart = _month_card(ms, hidden=(ms["month"] != default_month))
             body_parts.append(html)
             if chart:
                 chart_datas.append(chart)
