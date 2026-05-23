@@ -170,8 +170,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   th.align-right, td.align-right {{ text-align: right; }}
   th.align-center, td.align-center {{ text-align: center; }}
-  /* 섹터별 성과 표 — 본문 셀 padding 2배 */
-  .sector-table tbody td {{ padding: 32px 14px; }}
+  /* 섹터별 성과 표 — 본문 셀 좌우(width) padding 2배 */
+  .sector-table tbody td {{ padding: 16px 28px; }}
   td a {{ color: var(--link); text-decoration: none; }}
   td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
   td a:hover {{ color: #1d4ed8; }}
@@ -248,8 +248,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }}
     th {{ font-size: 0.805rem; padding: 12px 8px; }}
     td.stock-col {{ padding: 14px 8px; }}
-    /* 섹터 표 모바일도 padding 2x 유지 */
-    .sector-table tbody td {{ padding: 28px 8px; }}
+    /* 섹터 표 모바일 — 좌우 padding 2x 유지 */
+    .sector-table tbody td {{ padding: 14px 16px; }}
     .stock-logo, .stock-logo-fb {{ width: 26px; height: 26px; }}
     .stock-logo-fb {{ line-height: 26px; font-size: 10px; }}
     .stock-row {{ gap: 6px; }}
