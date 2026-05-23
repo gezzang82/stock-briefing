@@ -51,9 +51,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     overflow-x: hidden;  /* 가로 스크롤 방지 (잘못된 요소 폭 보호) */
   }}
   /* ── Header ── */
-  h1 {{ margin: 0 0 0.4rem; font-size: 1.45rem; font-weight: 700; letter-spacing: -0.01em; }}
+  h1 {{ margin: 0 0 0.4rem; font-size: 1.575rem; font-weight: 700; letter-spacing: -0.01em; }}
   .meta {{
-    color: var(--muted); font-size: 0.82rem;
+    color: var(--muted); font-size: 0.945rem;
     margin: 0 0 1.5rem; padding: 0 0 0 1.1rem;
   }}
   .meta li {{ margin: 0.1rem 0; }}
@@ -69,7 +69,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .year-selector {{
     background: white; border: 1px solid var(--border);
     padding: 0.5rem 0.9rem; border-radius: 999px;
-    font-size: 0.88rem; font-weight: 500; color: var(--text);
+    font-size: 1.005rem; font-weight: 500; color: var(--text);
     cursor: pointer; font-family: inherit;
     appearance: none; -webkit-appearance: none;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'><path fill='%231d2433' d='M7 10l5 5 5-5z'/></svg>");
@@ -79,7 +79,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .month-tab {{
     background: transparent; border: none;
     padding: 0.5rem 0.95rem; border-radius: 999px;
-    font-size: 0.88rem; font-weight: 500; color: var(--muted);
+    font-size: 1.005rem; font-weight: 500; color: var(--muted);
     cursor: pointer; font-family: inherit;
     white-space: nowrap; transition: all 0.15s;
   }}
@@ -94,8 +94,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     box-shadow: 0 1px 2px rgba(0,0,0,0.03);
   }}
   .month-card[hidden] {{ display: none; }}
-  .month-title {{ font-size: 1.4rem; font-weight: 700; margin: 0 0 0.25rem; }}
-  .month-subtitle {{ font-size: 0.82rem; color: var(--muted); margin: 0 0 1rem; }}
+  .month-title {{ font-size: 1.525rem; font-weight: 700; margin: 0 0 0.25rem; }}
+  .month-subtitle {{ font-size: 0.945rem; color: var(--muted); margin: 0 0 1rem; }}
   .stats-grid {{
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
     margin-bottom: 0.5rem;
@@ -105,9 +105,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: var(--pill-bg); border-radius: 10px;
     padding: 0.7rem 0.9rem;
     display: flex; align-items: center; justify-content: space-between;
-    gap: 0.4rem; font-size: 0.82rem; color: var(--muted);
+    gap: 0.4rem; font-size: 0.945rem; color: var(--muted);
   }}
-  .stat-cell strong {{ color: var(--text); font-weight: 700; font-size: 0.9rem; }}
+  .stat-cell strong {{ color: var(--text); font-weight: 700; font-size: 1.025rem; }}
   .stat-cell strong.up {{ color: var(--up); }}
   .stat-cell strong.down {{ color: var(--down); }}
   .chart {{
@@ -118,7 +118,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .chart-legend {{
     display: grid; grid-template-columns: repeat(4, 1fr);
     gap: 0.4rem 0.6rem; margin-top: 0.5rem;
-    font-size: 0.7rem; color: var(--muted);
+    font-size: 0.825rem; color: var(--muted);
   }}
   .legend-item {{ display: flex; align-items: center; gap: 0.35rem; }}
   .legend-dot {{
@@ -127,19 +127,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   @media (max-width: 480px) {{
     .chart-legend {{
       grid-template-columns: repeat(2, 1fr) !important;
-      font-size: 0.68rem; gap: 0.35rem 0.4rem;
+      font-size: 0.805rem; gap: 0.35rem 0.4rem;
     }}
   }}
   /* ── Table headings ── */
   h3.section-title {{
-    margin: 1.8rem 0 0.25rem; font-size: 1.05rem; font-weight: 700;
+    margin: 1.8rem 0 0.25rem; font-size: 1.175rem; font-weight: 700;
   }}
-  h3.section-title .count {{ color: var(--muted); font-size: 0.85rem; font-weight: 500; }}
-  .section-desc {{ font-size: 0.78rem; color: var(--muted); margin: 0 0 0.7rem; }}
+  h3.section-title .count {{ color: var(--muted); font-size: 0.975rem; font-weight: 500; }}
+  .section-desc {{ font-size: 0.905rem; color: var(--muted); margin: 0 0 0.7rem; }}
   /* ── Tables ── */
   table {{
     width: 100%; border-collapse: collapse;
-    margin-top: 0.5rem; font-size: 0.85rem;
+    margin-top: 0.5rem; font-size: 0.975rem;
     background: var(--card); border-radius: 12px; overflow: hidden;
     table-layout: fixed;
   }}
@@ -155,7 +155,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     text-align: left; vertical-align: middle;
   }}
   th {{
-    background: white; font-weight: 500; font-size: 0.78rem;
+    background: white; font-weight: 500; font-size: 0.905rem;
     color: var(--muted); border-bottom: 1px solid var(--separator);
   }}
   /* Vertical separators between columns */
@@ -166,7 +166,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td a {{ color: var(--link); text-decoration: none; }}
   td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
   td a:hover {{ color: #1d4ed8; }}
-  td.mfe-mae {{ font-size: 0.78rem; white-space: nowrap; line-height: 1.35; text-align: right; }}
+  td.mfe-mae {{ font-size: 0.905rem; white-space: nowrap; line-height: 1.35; text-align: right; }}
   td.mfe-mae .row {{ display: block; }}
   td.stock-col {{ padding: 12px 10px; }}
   td.amount-col {{ font-weight: 600; text-align: right; }}
@@ -175,12 +175,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .stock-row {{ display: flex; align-items: center; gap: 10px; }}
   .stock-info {{ display: flex; flex-direction: column; gap: 3px; min-width: 0; }}
   .stock-info .stock-name {{
-    color: var(--text); font-weight: 500; font-size: 0.88rem;
+    color: var(--text); font-weight: 500; font-size: 1.005rem;
     border-bottom: 1px dashed transparent;
   }}
   .stock-link:hover .stock-name {{ color: var(--link); }}
   .sector-tag {{
-    display: inline-block; font-size: 0.62rem;
+    display: inline-block; font-size: 0.745rem;
     padding: 1px 7px; border-radius: 6px;
     line-height: 1.4; font-weight: 700;
     letter-spacing: -0.01em;
@@ -201,13 +201,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .show-more-btn {{
     background: white; border: 1px solid var(--border); color: var(--text);
     padding: 0.55rem 1.4rem; border-radius: 10px; cursor: pointer;
-    font-size: 0.85rem; font-family: inherit;
+    font-size: 0.975rem; font-family: inherit;
   }}
   .show-more-btn:hover {{ background: #f0f3f5; }}
   /* Empty */
   .empty {{
     color: var(--muted); padding: 2.5rem 1rem; text-align: center;
-    font-size: 0.88rem; line-height: 1.6;
+    font-size: 1.005rem; line-height: 1.6;
   }}
   /* Up/Down colors */
   .up {{ color: var(--up); font-weight: 600; }}
@@ -216,20 +216,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   /* Responsive */
   @media (max-width: 480px) {{
     body {{ padding: 0.9rem 0.7rem; }}
-    h1 {{ font-size: 1.15rem; }}
-    .meta {{ font-size: 0.78rem; }}
+    h1 {{ font-size: 1.275rem; }}
+    .meta {{ font-size: 0.905rem; }}
     .month-card {{ padding: 1.1rem 0.9rem; }}
-    .month-title {{ font-size: 1.25rem; }}
+    .month-title {{ font-size: 1.375rem; }}
     .chart {{ height: 280px; }}
     .stats-grid {{ gap: 0.4rem; }}
     .stat-cell {{
-      padding: 0.5rem 0.55rem; font-size: 0.7rem;
+      padding: 0.5rem 0.55rem; font-size: 0.825rem;
       flex-direction: column; align-items: flex-start; gap: 0.15rem;
     }}
-    .stat-cell strong {{ font-size: 0.92rem; }}
+    .stat-cell strong {{ font-size: 1.045rem; }}
     /* 표: 4컬럼 모바일 압축 — 세로 구분선 제거 (가로 공간 확보) */
     th:not(:last-child), td:not(:last-child) {{ border-right: none !important; }}
-    table {{ font-size: 0.76rem; table-layout: fixed !important; }}
+    table {{ font-size: 0.885rem; table-layout: fixed !important; }}
     /* nth-child로 명시 (colgroup보다 신뢰성↑) */
     table th:nth-child(1), table td:nth-child(1) {{ width: 50px !important; }}
     table th:nth-child(3), table td:nth-child(3) {{ width: 56px !important; }}
@@ -239,18 +239,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .stock-info .stock-name {{
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }}
-    th {{ font-size: 0.68rem; }}
+    th {{ font-size: 0.805rem; }}
     td.stock-col {{ padding: 9px 5px; }}
     .stock-logo, .stock-logo-fb {{ width: 26px; height: 26px; }}
     .stock-logo-fb {{ line-height: 26px; font-size: 10px; }}
     .stock-row {{ gap: 6px; }}
     .stock-info {{ gap: 2px; }}
-    .stock-info .stock-name {{ font-size: 0.8rem; }}
-    .sector-tag {{ font-size: 0.58rem; padding: 1px 5px; }}
-    td.mfe-mae {{ font-size: 0.72rem; }}
-    td.amount-col {{ font-size: 0.82rem; }}
+    .stock-info .stock-name {{ font-size: 0.925rem; }}
+    .sector-tag {{ font-size: 0.705rem; padding: 1px 5px; }}
+    td.mfe-mae {{ font-size: 0.845rem; }}
+    td.amount-col {{ font-size: 0.945rem; }}
     /* 추천일 column nowrap + 작게 */
-    td:first-child, th:first-child {{ white-space: nowrap; font-size: 0.7rem; }}
+    td:first-child, th:first-child {{ white-space: nowrap; font-size: 0.825rem; }}
   }}
 </style>
 </head>
