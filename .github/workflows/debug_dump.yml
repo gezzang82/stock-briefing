@@ -1,0 +1,62 @@
+name: DB 덤프 (디버그)
+on:
+  workflow_dispatch:
+concurrency:
+  group: stock-briefing
+  cancel-in-progress: false
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: DB 캐시 복원
+        uses: actions/cache@v4
+        with:
+          path: |
+            stock_briefing.db
+            .kis_token_cache
+          key: stock-state-dump-${{ github.run_id }}
+          restore-keys: stock-state-
+      - name: snapshot 덤프
+        run: |
+          python3 -c "
+          import sqlite3, json
+          conn = sqlite3.connect('stock_briefing.db')
+          conn.row_factory = sqlite3.Row
+          rows = conn.execute('SELECT id, snapshot_date, market_regime, kospi, kosdaq, news_sentiment, recommendation_count, length(snapshot_json) as json_size FROM snapshot_logs ORDER BY id DESC LIMIT 5').fetchall()
+          print(f'snapshot_logs 행 수: {len(rows)}')
+          for r in rows:
+              print(f\"  [{r['id']}] {r['snapshot_date']} regime={r['market_regime']} kospi={r['kospi']} kosdaq={r['kosdaq']} sentiment={r['news_sentiment']} recs={r['recommendation_count']} json={r['json_size']} bytes\")
+          print()
+          # 최신 snapshot 상세
+          if rows:
+              latest = conn.execute('SELECT snapshot_json FROM snapshot_logs ORDER BY id DESC LIMIT 1').fetchone()
+              data = json.loads(latest['snapshot_json'])
+              print('=== 최신 snapshot 키 ===')
+              for k in data:
+                  v = data[k]
+                  if isinstance(v, list):
+                      print(f'  {k}: list[{len(v)}]')
+                  elif isinstance(v, dict):
+                      print(f'  {k}: dict (keys: {list(v.keys())})')
+                  else:
+                      print(f'  {k}: {repr(v)[:80]}')
+              # candidates 첫 항목
+              if data.get('candidates'):
+                  print()
+                  print('=== candidates[0] ===')
+                  for k, v in data['candidates'][0].items():
+                      print(f'  {k}: {repr(v)[:80]}')
+              # dropped 통계
+              if data.get('dropped_recommendations'):
+                  reasons = {}
+                  for d in data['dropped_recommendations']:
+                      r = d.get('drop_reason', '?')
+                      reasons[r] = reasons.get(r, 0) + 1
+                  print()
+                  print('=== dropped reasons ===')
+                  for reason, count in sorted(reasons.items(), key=lambda x: -x[1]):
+                      print(f'  {count}x  {reason}')
+          "
