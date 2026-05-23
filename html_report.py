@@ -51,14 +51,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     overflow-x: hidden;  /* 가로 스크롤 방지 (잘못된 요소 폭 보호) */
   }}
   /* ── Header ── */
-  h1 {{ margin: 0 0 0.4rem; font-size: 1.575rem; font-weight: 700; letter-spacing: -0.01em; }}
+  .header-row {{
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 0.6rem;
+    margin-bottom: 0.4rem;
+  }}
+  h1 {{ margin: 0; font-size: 1.575rem; font-weight: 700; letter-spacing: -0.01em; }}
+  .workflow-link {{
+    color: #589EFF; text-decoration: none;
+    font-size: 0.945rem; font-weight: 500;
+    white-space: nowrap; flex-shrink: 0;
+  }}
+  .workflow-link:hover {{ opacity: 0.8; }}
+  .workflow-link .chevron {{
+    display: inline-block; margin-left: 0.15rem;
+    font-weight: 600;
+  }}
   .meta {{
     color: var(--muted); font-size: 0.945rem;
     margin: 0 0 1.5rem; padding: 0 0 0 1.1rem;
   }}
   .meta li {{ margin: 0.1rem 0; }}
-  .workflow-link {{ color: var(--link); text-decoration: none; font-weight: 500; }}
-  .workflow-link:hover {{ text-decoration: underline; }}
+  .meta-link {{ color: var(--link); text-decoration: none; font-weight: 500; }}
+  .meta-link:hover {{ text-decoration: underline; }}
   /* ── Filter bar (year + month tabs) ── */
   .filter-bar {{
     display: flex; align-items: center; gap: 0.7rem;
@@ -233,6 +248,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   @media (max-width: 480px) {{
     body {{ padding: 0.9rem 0.7rem; }}
     h1 {{ font-size: 1.275rem; }}
+    .workflow-link {{ font-size: 0.825rem; }}
     .meta {{ font-size: 0.905rem; }}
     .month-card {{ padding: 1.1rem 0.9rem; }}
     .month-title {{ font-size: 1.375rem; }}
@@ -271,12 +287,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-  <h1>📊 주식 AI 백테스트 리포트</h1>
+  <div class="header-row">
+    <h1>📊 주식 AI 백테스트 리포트</h1>
+    <a href="./workflow.html" class="workflow-link">워크플로우 보기 <span class="chevron">›</span></a>
+  </div>
   <ul class="meta">
     <li>최종 업데이트 : {updated_at} KST</li>
     <li>평가 기준 : 추천일 +14일 시점 수익률 (8개 티어)</li>
-    <li><a href="./workflow.html" class="workflow-link">🔧 시스템 워크플로우 보기 →</a></li>
-    <li><a href="./demo.html" class="workflow-link">🎨 디자인 미리보기 (가짜 데이터) →</a></li>
+    <li><a href="./demo.html" class="meta-link">🎨 디자인 미리보기 (가짜 데이터) →</a></li>
   </ul>
 
 {body}
