@@ -273,6 +273,17 @@ function logoFail(img) {{
   span.textContent = img.dataset.letter;
   img.parentElement.replaceChild(span, img);
 }}
+function resizePlotlyIn(card) {{
+  // 카드가 보이게 된 후 그 안의 차트를 다시 사이즈 계산
+  if (!card || !window.Plotly) return;
+  var chart = card.querySelector('.chart');
+  if (chart) {{
+    // 다음 paint 후에 resize (display: block 적용 대기)
+    requestAnimationFrame(function() {{
+      try {{ Plotly.Plots.resize(chart); }} catch(e) {{}}
+    }});
+  }}
+}}
 function selectMonth(btn) {{
   var month = btn.dataset.month;
   var year = btn.dataset.year;
@@ -282,6 +293,7 @@ function selectMonth(btn) {{
   document.querySelectorAll('.month-card').forEach(function(card) {{
     var match = (!month || card.dataset.month === year + '-' + month);
     card.hidden = !match;
+    if (match) resizePlotlyIn(card);
   }});
 }}
 function selectYear(sel) {{
@@ -293,7 +305,6 @@ function selectYear(sel) {{
   document.querySelectorAll('.month-card').forEach(function(card) {{
     card.hidden = !card.dataset.month.startsWith(year + '-');
   }});
-  // 해당 연도 첫 번째 탭 active
   var firstTab = document.querySelector('.month-tab');
   if (firstTab) {{
     firstTab.classList.add('active');
