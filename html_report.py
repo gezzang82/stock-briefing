@@ -169,6 +169,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: var(--separator);
   }}
   th.align-right, td.align-right {{ text-align: right; }}
+  th.align-center, td.align-center {{ text-align: center; }}
+  /* 섹터별 성과 표 — 본문 셀 padding 2배 */
+  .sector-table tbody td {{ padding: 32px 14px; }}
   td a {{ color: var(--link); text-decoration: none; }}
   td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
   td a:hover {{ color: #1d4ed8; }}
@@ -245,6 +248,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }}
     th {{ font-size: 0.805rem; padding: 12px 8px; }}
     td.stock-col {{ padding: 14px 8px; }}
+    /* 섹터 표 모바일도 padding 2x 유지 */
+    .sector-table tbody td {{ padding: 28px 8px; }}
     .stock-logo, .stock-logo-fb {{ width: 26px; height: 26px; }}
     .stock-logo-fb {{ line-height: 26px; font-size: 10px; }}
     .stock-row {{ gap: 6px; }}
@@ -502,13 +507,13 @@ def _sector_table(sectors: list[dict]) -> str:
         rows.append(
             f"<tr>"
             f"<td>{s['sector']}</td>"
-            f'<td class="align-right">{s["total"]}</td>'
+            f'<td class="align-center">{s["total"]}</td>'
             f'<td class="align-right {cls}">{sign}{abs(s["avg_return"]):.2f}%</td>'
             f"</tr>"
         )
     return (
         f'<h3 class="section-title">섹터별 성과 <span class="count">(최근 30일)</span></h3>'
-        f'<div class="table-wrap"><table>'
+        f'<div class="table-wrap"><table class="sector-table">'
         f"<colgroup>"
         f'<col class="sector-name"><col class="sector-count"><col class="sector-ret">'
         f"</colgroup>"
