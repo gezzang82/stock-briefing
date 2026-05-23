@@ -159,6 +159,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: white; font-weight: 500; font-size: 0.905rem;
     color: var(--muted); border-bottom: 1px solid var(--separator);
     padding-top: 14px; padding-bottom: 14px;
+    text-align: center;  /* 헤더 텍스트만 중앙 정렬 (body td는 영향 없음) */
   }}
   /* 세로 구분선 — 헤더 영역에만 (셀 중앙에 짧은 세로 라인) */
   th:not(:last-child)::after {{
