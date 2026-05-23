@@ -193,16 +193,34 @@ def _compute_stats(last_24h: list[dict], prev_24h: list[dict]) -> dict:
     }
 
 
-def fetch_financial_news(max_articles: int = 50) -> str:
+def fetch_financial_news(max_articles: int = 50) -> dict:
     """
-    네이버 뉴스 → 가중치/감성/중복제거/통계 → AI 프롬프트용 텍스트.
+    네이버 뉴스 → 가중치/감성/중복제거/통계 → dict 반환.
+
+    Returns:
+      {
+        "text": str       — AI 프롬프트에 삽입할 enriched 텍스트
+        "stats": dict     — 가중 언급량/감성/24h 변화 등 수치
+        "top_headlines": list[dict]  — 신뢰도순 상위 헤드라인 (snapshot용)
+      }
     """
     raw = []
     for kw in SEARCH_KEYWORDS:
         raw.extend(_fetch_one(kw, display=15))
     if not raw:
         logger.warning("뉴스를 수집하지 못했습니다.")
-        return "뉴스 데이터 없음 — 일반 시장 분석 기반으로 추천해주세요."
+        return {
+            "text": "뉴스 데이터 없음 — 일반 시장 분석 기반으로 추천해주세요.",
+            "stats": {
+                "weighted_score_24h": 0, "weighted_score_prev": 0,
+                "growth_pct": None,
+                "avg_sentiment_24h": 0.0, "avg_sentiment_prev": 0.0,
+                "sentiment_change": 0.0,
+                "trusted_count_24h": 0, "trusted_count_prev": 0,
+                "blocked_count": 0,
+            },
+            "top_headlines": [],
+        }
 
     enriched = [_enrich(a) for a in raw]
     deduped = _dedupe(enriched)
@@ -257,9 +275,29 @@ def fetch_financial_news(max_articles: int = 50) -> str:
         if art["description"]:
             lines.append(f"      {art['description'][:120]}")
 
-    return "\n".join(lines)
+    # snapshot용 상위 헤드라인 요약
+    top_headlines = [
+        {
+            "title": a["title"],
+            "source": a["source"],
+            "weight": a["weight"],
+            "sentiment": a["sentiment"],
+            "pub_date": (a["datetime"].isoformat() if a.get("datetime") else None),
+        }
+        for a in selected[:15]
+    ]
+    stats_out = {**stats, "blocked_count": len(blocked)}
+
+    return {
+        "text": "\n".join(lines),
+        "stats": stats_out,
+        "top_headlines": top_headlines,
+    }
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    print(fetch_financial_news(max_articles=20))
+    result = fetch_financial_news(max_articles=20)
+    print(result["text"])
+    print()
+    print("stats:", result["stats"])

@@ -1,4 +1,5 @@
 import sqlite3
+import json
 import logging
 from datetime import date, datetime
 from contextlib import contextmanager
@@ -54,9 +55,22 @@ CREATE TABLE IF NOT EXISTS accuracy_results (
     calculated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+CREATE TABLE IF NOT EXISTS snapshot_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_date TEXT NOT NULL,
+    market_regime TEXT,
+    kospi REAL,
+    kosdaq REAL,
+    news_sentiment REAL,
+    recommendation_count INTEGER,
+    snapshot_json TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_rec_date ON recommendations(rec_date);
 CREATE INDEX IF NOT EXISTS idx_track_date ON price_tracking(track_date);
 CREATE INDEX IF NOT EXISTS idx_tracking_code ON price_tracking(stock_code, rec_date);
+CREATE INDEX IF NOT EXISTS idx_snapshot_date ON snapshot_logs(snapshot_date);
 """
 
 
@@ -194,6 +208,65 @@ def get_recent_accuracy(limit: int = 10) -> list[sqlite3.Row]:
         return conn.execute(
             "SELECT * FROM accuracy_results ORDER BY rec_date DESC LIMIT ?", (limit,)
         ).fetchall()
+
+
+def save_snapshot(
+    snapshot_date: str,
+    market_regime: str | None,
+    kospi: float | None,
+    kosdaq: float | None,
+    news_sentiment: float | None,
+    recommendation_count: int,
+    snapshot_dict: dict,
+) -> bool:
+    """
+    추천 당시 전체 컨텍스트 snapshot 저장.
+    JSON 직렬화/DB 쓰기 실패해도 raise하지 않고 False 반환 → 브리핑 전체 흐름 유지.
+    """
+    try:
+        snapshot_json = json.dumps(snapshot_dict, ensure_ascii=False, default=str)
+    except Exception as e:
+        logger.warning("Snapshot JSON 직렬화 실패: %s", e)
+        return False
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                """INSERT INTO snapshot_logs
+                   (snapshot_date, market_regime, kospi, kosdaq,
+                    news_sentiment, recommendation_count, snapshot_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (snapshot_date, market_regime, kospi, kosdaq,
+                 news_sentiment, recommendation_count, snapshot_json),
+            )
+        return True
+    except Exception as e:
+        logger.warning("Snapshot DB 저장 실패: %s", e)
+        return False
+
+
+def get_snapshot_by_date(snapshot_date: str) -> dict | None:
+    """
+    특정 일자의 snapshot 조회 (같은 날 여러 번 저장됐다면 최신 것 반환).
+    snapshot_data 필드에 파싱된 dict가 들어감.
+    """
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT id, snapshot_date, market_regime, kospi, kosdaq,
+                      news_sentiment, recommendation_count, snapshot_json, created_at
+               FROM snapshot_logs
+               WHERE snapshot_date = ?
+               ORDER BY created_at DESC LIMIT 1""",
+            (snapshot_date,),
+        ).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    try:
+        result["snapshot_data"] = json.loads(result["snapshot_json"])
+    except Exception as e:
+        logger.warning("Snapshot JSON 파싱 실패 [%s]: %s", snapshot_date, e)
+        result["snapshot_data"] = None
+    return result
 
 
 def get_recent_recommended_stocks(days: int = 7) -> list[dict]:

@@ -150,6 +150,137 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
     return cleaned, price_map, rejected
 
 
+def _save_decision_snapshot(
+    today: str,
+    kospi_data: dict | None,
+    kosdaq_data: dict | None,
+    regime_info: dict | None,
+    analysis: dict,
+    news_stats: dict,
+    news_headlines: list[dict],
+    tech_candidates: list[dict],
+    qualified: list[dict],
+    validation_rejected: list[dict],
+    score_filtered_out: list[tuple[dict, str]],
+):
+    """
+    추천 시점의 전체 의사결정 컨텍스트를 snapshot_logs에 저장.
+    """
+    from database import save_snapshot
+
+    # ── dropped 통합 ──
+    dropped: list[dict] = []
+    for r in validation_rejected:
+        dropped.append({
+            "code": r.get("code", ""),
+            "name": r.get("name", ""),
+            "drop_reason": r.get("reason", "validation"),
+            "phase": "validation",
+        })
+    for rec, reason in score_filtered_out:
+        dropped.append({
+            "code": rec.get("code", ""),
+            "name": rec.get("name", ""),
+            "drop_reason": reason,
+            "phase": "score_filter",
+        })
+
+    # ── candidates: 점수와 신호 + 수급/지표 모두 보존 ──
+    candidates_dump = []
+    for c in tech_candidates:
+        ind = c.get("indicators", {})
+        sup = c.get("supply", {})
+        candidates_dump.append({
+            "code": c.get("code"),
+            "name": c.get("name"),
+            "tech_score": round(c.get("score", 0), 2),
+            "signals": c.get("signals", []),
+            "current_price": c.get("current_price"),
+            "change_pct": c.get("change_pct"),
+            "volume": c.get("volume"),
+            # supply breakdown
+            "foreign_5d_million": sup.get("foreign_5d_million"),
+            "instit_5d_million": sup.get("instit_5d_million"),
+            "foreign_ratio": sup.get("foreign_ratio"),
+            "instit_ratio": sup.get("instit_ratio"),
+            "volume_ratio": sup.get("value_ratio"),
+            "program_net_won": sup.get("program_net_won"),
+            # technical indicators
+            "rsi14": ind.get("rsi14"),
+            "ma20_dev_pct": ind.get("price_vs_ma20"),
+            "momentum_20d": ind.get("momentum_20d"),
+            "is_breakout": ind.get("is_breakout"),
+            "is_uptrend": ind.get("is_uptrend"),
+        })
+
+    # ── selected: AI가 선정 & 검증/필터 통과한 종목 ──
+    selected_dump = [
+        {
+            "rank": r.get("rank"),
+            "code": r.get("code"),
+            "name": r.get("name"),
+            "sector": r.get("sector"),
+            "tech_score": r.get("tech_score"),
+            "target_return": r.get("target_return"),
+            "risk_level": r.get("risk_level"),
+            "reason": r.get("reason"),
+            "key_catalyst": r.get("key_catalyst"),
+        }
+        for r in qualified
+    ]
+
+    # ── 종합 snapshot dict ──
+    snapshot = {
+        "date": today,
+        "market": {
+            "kospi": kospi_data["current"] if kospi_data else None,
+            "kospi_change_pct": kospi_data["change_pct"] if kospi_data else None,
+            "kosdaq": kosdaq_data["current"] if kosdaq_data else None,
+            "kosdaq_change_pct": kosdaq_data["change_pct"] if kosdaq_data else None,
+            "market_regime": regime_info["regime"] if regime_info else None,
+            "regime_score": regime_info["score"] if regime_info else None,
+            "regime_signals": regime_info["signals"] if regime_info else {},
+            "market_summary": analysis.get("market_summary", ""),
+            "key_themes": analysis.get("key_themes", []),
+            "risk_factors": analysis.get("risk_factors", ""),
+        },
+        "news": {
+            "sentiment_score": news_stats.get("avg_sentiment_24h"),
+            "sentiment_prev": news_stats.get("avg_sentiment_prev"),
+            "sentiment_change": news_stats.get("sentiment_change"),
+            "weighted_score_24h": news_stats.get("weighted_score_24h"),
+            "weighted_score_prev": news_stats.get("weighted_score_prev"),
+            "growth_pct": news_stats.get("growth_pct"),
+            "headline_count": news_stats.get("trusted_count_24h"),
+            "blocked_count": news_stats.get("blocked_count"),
+            "top_headlines": news_headlines,
+        },
+        "candidates": candidates_dump,
+        "selected_recommendations": selected_dump,
+        "dropped_recommendations": dropped,
+    }
+
+    ok = save_snapshot(
+        snapshot_date=today,
+        market_regime=(regime_info["regime"] if regime_info else None),
+        kospi=(kospi_data["current"] if kospi_data else None),
+        kosdaq=(kosdaq_data["current"] if kosdaq_data else None),
+        news_sentiment=news_stats.get("avg_sentiment_24h"),
+        recommendation_count=len(qualified),
+        snapshot_dict=snapshot,
+    )
+    if ok:
+        logger.info(
+            "💾 Snapshot saved (candidates=%d, selected=%d, dropped=%d)",
+            len(tech_candidates), len(qualified), len(dropped),
+        )
+    else:
+        logger.warning(
+            "Snapshot 저장 실패 (candidates=%d, selected=%d)",
+            len(tech_candidates), len(qualified),
+        )
+
+
 def _one_recommendation_pass(
     news_text: str, kospi_display: str, kosdaq_display: str,
     recent: list[dict], tech_text: str, regime_text: str,
@@ -195,9 +326,12 @@ def run_daily_briefing():
     kosdaq_display = f"{kosdaq_data['current']:,.2f}" if kosdaq_data else "N/A"
     logger.info("시장 지수: %s | %s", kospi_str, kosdaq_str)
 
-    # 3. 뉴스 수집
+    # 3. 뉴스 수집 (dict: text + stats + top_headlines)
     logger.info("뉴스 수집 중...")
-    news_text = fetch_financial_news(max_articles=40)
+    news_data = fetch_financial_news(max_articles=40)
+    news_text = news_data["text"]
+    news_stats = news_data["stats"]
+    news_headlines = news_data["top_headlines"]
 
     # 4a-pre. 시장 상태 판단 (regime별 가중치 결정)
     regime_text = ""
@@ -308,6 +442,23 @@ def run_daily_briefing():
 
     # 7. 자격 있는 추천 DB 저장 (0개여도 저장 — rec_date 기록용)
     save_recommendations(today, qualified, analysis.get("market_summary", ""))
+
+    # 7.5. Snapshot — 추천 당시 전체 컨텍스트를 JSON으로 보존
+    try:
+        _save_decision_snapshot(
+            today=today,
+            kospi_data=kospi_data, kosdaq_data=kosdaq_data,
+            regime_info=regime_info,
+            analysis=analysis,
+            news_stats=news_stats,
+            news_headlines=news_headlines,
+            tech_candidates=tech_candidates,
+            qualified=qualified,
+            validation_rejected=all_rejected,
+            score_filtered_out=filtered_out,
+        )
+    except Exception as e:
+        logger.warning("Snapshot 저장 실패 (브리핑은 계속 진행): %s", e)
 
     # 8. 추천 당일 가격을 entry_price로 업데이트 (자격 있는 종목만)
     from database import update_entry_price
