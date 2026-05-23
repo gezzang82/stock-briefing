@@ -2,25 +2,23 @@
 카카오 OAuth 일회성 셋업 — access_token + refresh_token 발급.
 
 사전 조건 (카카오 개발자 콘솔 https://developers.kakao.com):
-  1) 앱 설정 → 플랫폼 → Web 플랫폼 등록
-     사이트 도메인: http://localhost:8000
-  2) 카카오 로그인 → 활성화 설정 ON
-  3) 카카오 로그인 → Redirect URI 등록: http://localhost:8000/callback
-  4) 카카오 로그인 → 동의항목 → "카카오톡 메시지 (talk_message)" 사용 설정
-  5) 앱 키 페이지에서 REST API 키 복사
+  1) 카카오 로그인 → 사용 설정 ON
+  2) 앱 → 플랫폼 키 → REST API 키 → Redirect URI 등록:
+     http://localhost/callback
+     (카카오는 포트 80/443만 허용 → 8000 같은 임의 포트 불가)
+  3) 카카오 로그인 → 동의항목 → "카카오톡 메시지 전송 (talk_message)" 사용 설정
+  4) 앱 → 플랫폼 키 → REST API 키 페이지에서 키 값 복사
 
 사용:
   python kakao_auth.py <REST_API_KEY>
 
 흐름:
-  - 브라우저 자동 오픈 → 카카오 로그인 + 동의
-  - localhost:8000/callback 으로 리다이렉트 (스크립트가 코드 캡처)
-  - 코드 → 토큰 교환
-  - access_token + refresh_token 출력
-  - GitHub Secret 등록 명령어도 출력
+  1. 브라우저 자동 오픈 → 카카오 로그인 + 동의
+  2. 카카오가 http://localhost/callback?code=XXX 으로 리다이렉트
+     (로컬 80포트가 열려있지 않아 "사이트에 연결할 수 없음" 페이지가 뜸 — 정상)
+  3. 브라우저 주소창에서 "code=" 다음의 긴 문자열을 복사
+  4. 터미널에 붙여넣기 → 토큰 교환 → access_token + refresh_token 출력
 """
-import http.server
-import socketserver
 import sys
 import urllib.parse
 import webbrowser
@@ -28,33 +26,7 @@ import webbrowser
 import requests
 
 
-PORT = 8000
-REDIRECT_URI = f"http://localhost:{PORT}/callback"
-
-_captured: dict[str, str] = {}
-
-
-class CallbackHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path.startswith("/callback"):
-            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            if "code" in qs:
-                _captured["code"] = qs["code"][0]
-                msg = "<h1>✅ 인증 완료</h1><p>터미널로 돌아가세요.</p>"
-            else:
-                _captured["error"] = qs.get("error", ["unknown"])[0]
-                msg = f"<h1>❌ 실패</h1><p>{_captured['error']}</p>"
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(msg.encode("utf-8"))
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def log_message(self, *_args):
-        # http.server 기본 로그 억제
-        pass
+REDIRECT_URI = "http://localhost/callback"
 
 
 def exchange_code_for_tokens(rest_api_key: str, code: str) -> dict:
@@ -76,7 +48,7 @@ def main():
     if len(sys.argv) < 2:
         print("사용법: python kakao_auth.py <REST_API_KEY>")
         print()
-        print("REST API 키는 카카오 개발자 콘솔 → 내 애플리케이션 → 앱 키 페이지")
+        print("REST API 키는 카카오 개발자 콘솔 → 앱 → 플랫폼 키 → REST API 키")
         print("https://developers.kakao.com/console/app")
         sys.exit(1)
 
@@ -93,23 +65,31 @@ def main():
     print("카카오 OAuth — access_token + refresh_token 발급")
     print("=" * 60)
     print()
-    print(f"1) 브라우저 자동 오픈: {auth_url[:80]}...")
-    print(f"2) 카카오 로그인 + 권한 동의 (talk_message)")
-    print(f"3) localhost:{PORT}/callback 으로 자동 리다이렉트")
+    print("1) 브라우저가 자동으로 열려 카카오 로그인 페이지가 뜹니다.")
+    print("2) 로그인 + 권한 동의 (talk_message) 클릭.")
+    print(f"3) 카카오가 {REDIRECT_URI}?code=XXX 로 리다이렉트합니다.")
+    print('   브라우저는 "사이트에 연결할 수 없음" 페이지를 보여줍니다 (정상).')
+    print('4) 그 페이지의 주소창에서 "code=" 다음에 오는 긴 문자열만 복사.')
+    print('   예: http://localhost/callback?code=AbCdEf12...')
+    print('              여기서부터 끝까지 ───↑')
     print()
+    input("준비되면 Enter — 브라우저 열림: ")
     webbrowser.open(auth_url)
+    print()
+    print("브라우저 열기 실패 시 직접 접속:")
+    print(f"  {auth_url}")
+    print()
 
-    print(f"localhost:{PORT} 콜백 대기 중... (브라우저에서 로그인하세요)")
-    with socketserver.TCPServer(("", PORT), CallbackHandler) as httpd:
-        while "code" not in _captured and "error" not in _captured:
-            httpd.handle_request()
-
-    if "error" in _captured:
-        print(f"\n❌ 인증 실패: {_captured['error']}")
+    code = input("주소창에서 복사한 code 값 붙여넣기: ").strip()
+    if not code:
+        print("❌ code 입력 없음")
         sys.exit(1)
-
-    code = _captured["code"]
-    print(f"\n✅ 인가 코드 캡처 완료 (앞 12자: {code[:12]}...)")
+    # code= 부분 들어와도 자동 제거, & 뒤 부분도 제거
+    if "code=" in code:
+        code = code.split("code=", 1)[1]
+    if "&" in code:
+        code = code.split("&", 1)[0]
+    print(f"\n✅ 인가 코드 (앞 12자): {code[:12]}...")
 
     try:
         tokens = exchange_code_for_tokens(rest_api_key, code)
