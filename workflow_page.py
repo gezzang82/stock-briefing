@@ -20,9 +20,9 @@ HTML = r"""<!DOCTYPE html>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   :root {
-    --bg: #f7f9fc; --card: #ffffff; --text: #2c3e50; --muted: #7f8c8d;
-    --border: #ecf0f1; --accent: #3498db;
-    --green: #27ae60; --orange: #e67e22; --red: #e74c3c;
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2433; --muted: #8b95a1;
+    --border: #eef0f3; --separator: #e5e8ec; --accent: #2563eb;
+    --green: #16a34a; --orange: #e67e22; --red: #dc2626;
     --purple: #9b59b6; --teal: #16a085; --pink: #e91e63;
   }
   * { box-sizing: border-box; }
@@ -184,16 +184,20 @@ flowchart TD
     H -->|< 5개| G
     H -->|>= 5개| I[📏 점수 필터<br/>>= 50점만]
     I --> J[💾 DB 저장<br/>+ Snapshot]
+    J --> M[🎯 14일 추적<br/>MFE / MAE / Final]
     J --> K[🌐 HTML 대시보드]
     J --> L[📱 카카오톡 발송]
+    M -.수동 .-> N[📈 historical_backtest.py<br/>승률 / 샤프 / MDD]
 
-    style A fill:#3498db,stroke:#2980b9,color:#fff
+    style A fill:#2563eb,stroke:#1d4ed8,color:#fff
     style E fill:#9b59b6,stroke:#8e44ad,color:#fff
     style F fill:#16a085,stroke:#138d75,color:#fff
     style G fill:#e67e22,stroke:#d35400,color:#fff
-    style J fill:#27ae60,stroke:#229954,color:#fff
+    style J fill:#16a34a,stroke:#15803d,color:#fff
     style L fill:#f1c40f,stroke:#f39c12,color:#fff
-    style K fill:#3498db,stroke:#2980b9,color:#fff
+    style K fill:#2563eb,stroke:#1d4ed8,color:#fff
+    style M fill:#8e44ad,stroke:#7d3c98,color:#fff
+    style N fill:#dc2626,stroke:#b91c1c,color:#fff
     </pre>
   </div>
 </section>
@@ -416,19 +420,50 @@ flowchart TD
     <div class="channel">
       <div class="ic">📱</div>
       <h3>카카오톡 나에게 보내기</h3>
-      <p>매일 06:30 + 주간 리포트<br>토큰 자동 갱신 (영구 운영)</p>
+      <p>매일 06:30 + 주간 리포트<br>토큰 자동 갱신 (영구 운영)<br>실패 시 알림도 카톡으로</p>
     </div>
     <div class="channel web">
       <div class="ic">🌐</div>
       <h3>HTML 대시보드</h3>
-      <p>GitHub Pages 자동 배포<br>월별 도넛 차트 + 종목 표</p>
+      <p>GitHub Pages 자동 배포<br>월별 도넛 차트 + 종목 표<br>워크플로우 + 디자인 미리보기 페이지</p>
     </div>
   </div>
 </section>
 
+<!-- 11. 백테스트 -->
+<section>
+  <h2><span class="num">11</span> Historical Backtest — 과거 일자 시뮬레이션</h2>
+  <p class="desc">특정 날짜 구간에 시스템을 재실행한 것처럼 시뮬레이션해서 전략 검증.</p>
+  <div class="grid grid-2">
+    <div class="card purple">
+      <h3><span class="ic">⏱️</span> 어떻게 동작</h3>
+      <p>유니버스 종목의 OHLCV + 투자자 매매동향을 한 번 캐싱한 뒤,
+      과거 일자별로 그 시점까지의 데이터만으로 점수 재계산 → top N 선정 →
+      14일 forward 가격으로 성과 측정.</p>
+      <span class="tag purple">no lookahead</span>
+      <span class="tag purple">technical_screener 그대로 재사용</span>
+    </div>
+    <div class="card teal">
+      <h3><span class="ic">📈</span> 측정 지표</h3>
+      <p><strong>승률</strong> — final &gt; 0 비율<br>
+      <strong>평균 수익률</strong><br>
+      <strong>샤프비율</strong> — avg / stdev (raw)<br>
+      <strong>MDD</strong> — 일자별 평균 누적 곡선의 최대 낙폭</p>
+    </div>
+  </div>
+  <p class="desc" style="margin-top:0.8rem">
+    CLI 사용 예: <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:0.85em">
+    python historical_backtest.py --start 2026-05-08 --end 2026-05-22 --top-n 10 --min-score 50
+    </code><br>
+    제약: KIS 투자자 데이터가 ~30일 한도라 백테스트 기간 자동 30일 cap, 뉴스 입력은 제외 (수급+기술만).
+  </p>
+</section>
+
 <footer>
   생성: __GENERATED__ KST · 매 브리핑마다 자동 갱신<br>
-  <a href="./">메인 대시보드</a> · <a href="https://github.com/gezzang82/stock-briefing" target="_blank">GitHub</a>
+  <a href="./">메인 대시보드</a> ·
+  <a href="./demo.html">🎨 디자인 미리보기</a> ·
+  <a href="https://github.com/gezzang82/stock-briefing" target="_blank">GitHub</a>
 </footer>
 
 <script>
