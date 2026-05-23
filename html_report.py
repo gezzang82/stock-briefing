@@ -61,31 +61,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .workflow-link:hover {{ text-decoration: underline; }}
   /* ── Filter bar (year + month tabs) ── */
   .filter-bar {{
-    display: flex; align-items: center; gap: 0.5rem;
+    display: flex; align-items: center; gap: 0.7rem;
     margin-bottom: 1rem;
     overflow-x: auto; -webkit-overflow-scrolling: touch;
   }}
   .filter-bar::-webkit-scrollbar {{ display: none; }}
+  /* 공통: dropdown과 월 탭이 같은 높이 + 같은 padding */
+  .year-selector,
+  .month-tab {{
+    padding: 0.65rem 1.1rem;
+    font-size: 1.005rem; font-weight: 500;
+    border-radius: 999px;
+    font-family: inherit; cursor: pointer;
+    line-height: 1.3; white-space: nowrap;
+    transition: all 0.15s;
+  }}
   .year-selector {{
     background: white; border: 1px solid var(--border);
-    padding: 0.5rem 0.9rem; border-radius: 999px;
-    font-size: 1.005rem; font-weight: 500; color: var(--text);
-    cursor: pointer; font-family: inherit;
+    color: var(--text);
     appearance: none; -webkit-appearance: none;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'><path fill='%231d2433' d='M7 10l5 5 5-5z'/></svg>");
-    background-repeat: no-repeat; background-position: right 0.7rem center;
-    padding-right: 2rem;
+    background-repeat: no-repeat; background-position: right 0.8rem center;
+    padding-right: 2.1rem;
   }}
   .month-tab {{
-    background: transparent; border: none;
-    padding: 0.5rem 0.95rem; border-radius: 999px;
-    font-size: 1.005rem; font-weight: 500; color: var(--muted);
-    cursor: pointer; font-family: inherit;
-    white-space: nowrap; transition: all 0.15s;
+    background: transparent; border: 1px solid transparent;
+    color: var(--muted);
   }}
   .month-tab:hover {{ color: var(--text); }}
   .month-tab.active {{
     background: var(--tab-active); color: white; font-weight: 600;
+    border-color: var(--tab-active);
   }}
   /* ── Month card ── */
   .month-card {{
