@@ -160,6 +160,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     color: var(--muted); border-bottom: 1px solid var(--separator);
     padding-top: 14px; padding-bottom: 14px;
     text-align: center;  /* 헤더 텍스트만 중앙 정렬 (body td는 영향 없음) */
+    white-space: nowrap;
   }}
   /* 세로 구분선 — 헤더 영역에만 (셀 중앙에 짧은 세로 라인) */
   th:not(:last-child)::after {{
@@ -234,9 +235,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .stat-cell strong {{ font-size: 1.045rem; }}
     /* 표: 4컬럼 모바일 — 세로 구분선은 헤더에만 + 충분한 padding */
     table {{ font-size: 0.885rem; table-layout: fixed !important; }}
-    table th:nth-child(1), table td:nth-child(1) {{ width: 56px !important; }}
-    table th:nth-child(3), table td:nth-child(3) {{ width: 64px !important; }}
-    table th:nth-child(4), table td:nth-child(4) {{ width: 62px !important; }}
+    table th:nth-child(1), table td:nth-child(1) {{ width: 60px !important; }}
+    table th:nth-child(3), table td:nth-child(3) {{ width: 80px !important; }}
+    table th:nth-child(4), table td:nth-child(4) {{ width: 70px !important; }}
     th, td {{ padding: 14px 8px; overflow: hidden; }}
     .stock-info {{ overflow: hidden; }}
     .stock-info .stock-name {{
@@ -482,8 +483,8 @@ def _stock_table(items: list[dict], title: str,
         f"</colgroup>"
         f"<thead><tr>"
         f"<th>추천일</th><th>종목</th>"
-        f'<th class="align-right">현재 수익률</th>'
-        f'<th class="align-right">변동폭</th>'
+        f"<th>현재 수익률</th>"
+        f"<th>변동폭</th>"
         f"</tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
@@ -512,8 +513,8 @@ def _sector_table(sectors: list[dict]) -> str:
         f'<col class="sector-name"><col class="sector-count"><col class="sector-ret">'
         f"</colgroup>"
         f"<thead><tr><th>섹터</th>"
-        f'<th class="align-right">종목 수</th>'
-        f'<th class="align-right">평균 수익률</th></tr></thead>'
+        f"<th>종목 수</th>"
+        f"<th>평균 수익률</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody>"
         f"</table></div>"
     )
