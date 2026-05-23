@@ -62,11 +62,31 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_ACCESS_TOKEN: ${{ secrets.KAKAO_ACCESS_TOKEN }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             python main.py --run-now --force
           else
             python main.py --run-now
+          fi
+
+      - name: Kakao 토큰 자동 갱신 반영
+        if: success() && hashFiles('/tmp/kakao_tokens_new.json') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_ACCESS=$(python3 -c "import json; print(json.load(open('/tmp/kakao_tokens_new.json'))['access_token'])")
+          NEW_REFRESH=$(python3 -c "import json; d=json.load(open('/tmp/kakao_tokens_new.json')); print(d.get('refresh_token',''))")
+          if [ -n "$NEW_ACCESS" ]; then
+            echo "Kakao access_token 갱신 → Secret 업데이트"
+            printf '%s' "$NEW_ACCESS" | gh secret set KAKAO_ACCESS_TOKEN --repo ${{ github.repository }}
+          fi
+          if [ -n "$NEW_REFRESH" ]; then
+            echo "Kakao refresh_token 갱신 → Secret 업데이트"
+            printf '%s' "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo ${{ github.repository }}
           fi
 
       - name: GitHub Pages 설정

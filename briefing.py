@@ -522,5 +522,37 @@ def run_daily_briefing():
     )
     logger.info("Discord 전송 %s", "성공" if ok else "실패/건너뜀")
 
+    # 11. Kakao 나에게 보내기 (토큰 설정 시에만)
+    try:
+        from kakao_sender import send_message as kakao_send
+        from html_report import DASHBOARD_URL
+        regime_label = ""
+        if regime_info:
+            from market_regime import REGIME_LABEL
+            regime_label = REGIME_LABEL.get(regime_info["regime"], ("", ""))[0]
+
+        if qualified:
+            top_names = " · ".join(f"{r['name']}" for r in qualified[:3])
+            kakao_msg = (
+                f"📈 주식 AI 브리핑 [{today}]\n"
+                f"{kospi_str}\n{kosdaq_str}\n"
+                f"{regime_label}\n\n"
+                f"📊 추천 {len(qualified)}개\n"
+                f"TOP: {top_names}\n\n"
+                f"📱 대시보드: {DASHBOARD_URL}"
+            )
+        else:
+            kakao_msg = (
+                f"📭 주식 AI 브리핑 [{today}]\n"
+                f"{kospi_str}\n{kosdaq_str}\n"
+                f"{regime_label}\n\n"
+                f"오늘은 추천 종목 없음 (매매 보류)\n"
+                f"📱 대시보드: {DASHBOARD_URL}"
+            )
+        kakao_ok = kakao_send(kakao_msg)
+        logger.info("Kakao 전송 %s", "성공" if kakao_ok else "건너뜀/실패")
+    except Exception as e:
+        logger.warning("Kakao 전송 중 예외 (계속 진행): %s", e)
+
     logger.info("=== 브리핑 완료 ===")
     return analysis
