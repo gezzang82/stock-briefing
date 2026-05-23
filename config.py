@@ -38,9 +38,16 @@ LOG_DIR = BASE_DIR / "logs"
 
 BRIEFING_HOUR = 6
 BRIEFING_MINUTE = 30
-TOP_N_STOCKS = 10
+TOP_N_STOCKS = 10           # 최대 추천 종목 수 (실제는 score 필터로 가변)
 TRACKING_DAYS = 14          # 2주 후 평가
 HIT_THRESHOLD_PCT = 5.0     # 단순 적중 기준 (티어 +5%~+10% 경계)
+
+# 추천 자격 임계점수 — technical_screener의 0~100 점수 기준
+# 50 = 평균(외국인/기관 약매수 + 거래대금 정상)
+# 60 = 양호 (수급 시그널 + 거래대금 1.5x↑ 정도)
+# 70 = 강한 시그널 (외국인/기관 모두 + 거래대금 급증)
+# 이 값 미만의 종목은 신뢰도 부족으로 추천에서 제외
+MIN_SCORE_THRESHOLD = 50.0
 
 # 2주 후 수익률 평가 티어 (% 경계, 내림차순) — 8개 버킷
 TIER_BOUNDARIES = [30, 10, 5, 0, -5, -10, -30]

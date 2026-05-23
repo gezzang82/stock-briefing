@@ -130,6 +130,7 @@ def run_daily_briefing():
         regime_info = None
 
     # 4a. 기술적 스크리닝 (regime 가중치 적용)
+    tech_candidates = []
     try:
         from technical_screener import screen_candidates, format_for_prompt
         tech_candidates = screen_candidates(top_n=20, weights=weights)
@@ -148,21 +149,52 @@ def run_daily_briefing():
         tech_candidates_text=tech_text,
         regime_text=regime_text,
     )
-    # 결과에 regime 정보 첨부 (Discord/HTML에서 사용)
     if regime_info:
         analysis["regime_info"] = regime_info
 
-    # 5. 종목 검증 (코드 유효성/중복/이름 정정) — 시세 조회까지 한 번에
+    # 5. 종목 검증 (코드 유효성/중복/이름 정정)
     cleaned_recs, price_map = _validate_and_clean_recommendations(analysis["recommendations"])
-    analysis["recommendations"] = cleaned_recs
 
-    # 6. 검증된 추천 종목 DB 저장
-    save_recommendations(today, cleaned_recs, analysis.get("market_summary", ""))
+    # 6. 점수 필터 — 기술적 스크리닝 score ≥ MIN_SCORE_THRESHOLD인 종목만 유지
+    from config import MIN_SCORE_THRESHOLD, TOP_N_STOCKS
+    candidate_scores = {c["code"]: c for c in tech_candidates}
+    qualified = []
+    filtered_out = []
+    for rec in cleaned_recs:
+        cand = candidate_scores.get(rec["code"])
+        if cand is None:
+            rec["tech_score"] = None
+            filtered_out.append((rec, "기술적 후보 아님 (점수 미산정)"))
+            continue
+        rec["tech_score"] = cand["score"]
+        if cand["score"] < MIN_SCORE_THRESHOLD:
+            filtered_out.append((rec, f"점수 {cand['score']:.0f} < {MIN_SCORE_THRESHOLD:.0f}"))
+            continue
+        qualified.append(rec)
 
-    # 7. 추천 당일 가격을 entry_price로 업데이트
+    # 상위 N개 cap + 재정렬
+    qualified = qualified[:TOP_N_STOCKS]
+    for i, r in enumerate(qualified, 1):
+        r["rank"] = i
+
+    logger.info(
+        "점수 필터: 검증 %d개 → 자격 %d개 (제외 %d, 기준 ≥ %d)",
+        len(cleaned_recs), len(qualified), len(filtered_out), MIN_SCORE_THRESHOLD,
+    )
+    for rec, reason in filtered_out:
+        logger.info("  ↘ 제외 [%s] %s — %s", rec["code"], rec["name"], reason)
+
+    analysis["recommendations"] = qualified
+
+    # 7. 자격 있는 추천 DB 저장 (0개여도 저장 — rec_date 기록용)
+    save_recommendations(today, qualified, analysis.get("market_summary", ""))
+
+    # 8. 추천 당일 가격을 entry_price로 업데이트 (자격 있는 종목만)
     from database import update_entry_price
+    qualified_codes = {r["code"] for r in qualified}
     for code, pdata in price_map.items():
-        update_entry_price(today, code, pdata["current_price"])
+        if code in qualified_codes:
+            update_entry_price(today, code, pdata["current_price"])
 
     # 8. 활성 추천에 대해 오늘 가격 기록 (적중률 추적용)
     record_prices_for_active_recs()

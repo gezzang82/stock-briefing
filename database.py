@@ -91,6 +91,7 @@ def _migrate(conn):
         ("mfe_date", "TEXT"),
         ("mae_date", "TEXT"),
         ("outcome_updated_at", "TEXT"),
+        ("tech_score", "REAL"),       # 기술적 스크리닝 점수 (0~100)
     ]
     for col, col_type in new_cols:
         if col not in existing:
@@ -99,21 +100,22 @@ def _migrate(conn):
 
 
 def save_recommendations(rec_date: str, recommendations: list[dict], market_summary: str):
-    """AI 추천 종목 저장"""
+    """AI 추천 종목 저장 (tech_score 포함)"""
     with get_conn() as conn:
-        # 당일 기존 데이터 삭제 후 재저장 (재실행 안전)
         conn.execute("DELETE FROM recommendations WHERE rec_date = ?", (rec_date,))
         for r in recommendations:
             conn.execute(
                 """INSERT INTO recommendations
                    (rec_date, rank, stock_code, stock_name, sector, entry_price,
-                    target_return_pct, risk_level, reason, key_catalyst, market_summary)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    target_return_pct, risk_level, reason, key_catalyst,
+                    market_summary, tech_score)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     rec_date, r["rank"], r["code"], r["name"],
                     r.get("sector"), r.get("entry_price"),
                     r.get("target_return"), r.get("risk_level"),
                     r.get("reason"), r.get("key_catalyst"), market_summary,
+                    r.get("tech_score"),
                 ),
             )
     logger.info("%s 추천 종목 %d개 저장 완료", rec_date, len(recommendations))

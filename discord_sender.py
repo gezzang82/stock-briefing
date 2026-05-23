@@ -122,10 +122,12 @@ def send_briefing(
         mark = risk_emoji.get(rec.get("risk_level", "중간"), "🟡")
 
         naver_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
+        score = rec.get("tech_score")
+        score_part = f" · 점수 **{score:.0f}**" if score is not None else ""
         field_name = f"{rec['rank']}위  {mark}"
         # 종목명을 굵게+밑줄+링크로 → 버튼 느낌
         value = (
-            f"**[__{rec['name']}__]({naver_url})**  `{code}`\n"
+            f"**[__{rec['name']}__]({naver_url})**  `{code}`{score_part}\n"
             f"{price_label} **{price:,.0f}원** ({sign}{abs(chg):.1f}%)\n"
             f"섹터: {rec.get('sector', '-')} · 목표 +{rec.get('target_return', 0):.1f}%\n"
             f"💡 {rec.get('key_catalyst', '')}\n"
@@ -137,14 +139,25 @@ def send_briefing(
         if i < len(recs) - 1:
             fields.append({"name": "​", "value": "​", "inline": False})
 
-    recs_embed = {
-        "title": f"📊 추천 종목 TOP {len(recs)}",
-        "color": COLOR_GREEN,
-        "fields": fields[:25],  # Discord 임베드 필드 최대 25개
-    }
-
+    # 자격 충족 종목 없음 → 매매 대기 안내
+    if not recs:
+        from config import MIN_SCORE_THRESHOLD
+        recs_embed = {
+            "title": "📭 오늘은 추천 종목 없음",
+            "color": COLOR_GRAY,
+            "description": (
+                f"기술 점수 ≥ {MIN_SCORE_THRESHOLD:.0f} 기준을 충족하는 종목이 없습니다.\n"
+                f"외국인/기관 수급과 거래대금이 모두 약한 날입니다.\n\n"
+                f"**매매 보류 권고** — 신규 진입보다 관망이 합리적입니다."
+            ),
+        }
+    else:
+        recs_embed = {
+            "title": f"📊 오늘의 추천 종목 {len(recs)}개",
+            "color": COLOR_GREEN,
+            "fields": fields[:25],
+        }
     if accuracy_text:
         recs_embed["footer"] = {"text": accuracy_text[:2048]}
 
-    # Discord는 한 메시지에 최대 10개 임베드
     return _post({"embeds": [main_embed, recs_embed]})
