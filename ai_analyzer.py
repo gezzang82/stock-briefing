@@ -146,11 +146,16 @@ def analyze_and_recommend(
     try:
         result = _parse_ai_response(response_text)
         recs = result.get("recommendations", [])
-        # 검증에서 일부 드롭될 가능성 — TOP_N의 70% 이상이면 진행
-        min_acceptable = max(TOP_N_STOCKS - 3, int(TOP_N_STOCKS * 0.7))
-        if len(recs) < min_acceptable:
-            raise ValueError(f"추천 종목 수 부족: {len(recs)} < {min_acceptable}")
-        logger.info("AI 분석 완료 - 추천 종목 %d개 (목표 %d)", len(recs), TOP_N_STOCKS)
+        # 가변 카운트 시스템 — AI가 적게 반환해도 OK (점수 필터 + 재시도로 보완)
+        # 단, 0개거나 1개면 무언가 잘못된 것 (JSON 파싱 실패에 가까움)
+        if len(recs) == 0:
+            raise ValueError("추천 종목 0개 — 응답 형식 오류 가능성")
+        if len(recs) < int(TOP_N_STOCKS * 0.3):
+            logger.warning(
+                "AI 추천 %d개 (요청 %d) — 시장 데이터 부족 또는 보수적 응답",
+                len(recs), TOP_N_STOCKS,
+            )
+        logger.info("AI 분석 완료 - 추천 종목 %d개 (요청 %d)", len(recs), TOP_N_STOCKS)
         return result
     except Exception as e:
         logger.error("AI 응답 파싱 실패: %s\n응답: %s", e, response_text[:500])
