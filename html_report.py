@@ -151,18 +151,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   table col.sector-count {{ width: 80px; }}
   table col.sector-ret {{ width: 100px; }}
   th, td {{
-    padding: 12px 10px; border-bottom: 1px solid var(--border);
+    padding: 16px 14px; border-bottom: 1px solid var(--border);
     text-align: left; vertical-align: middle;
-    position: relative;  /* ::after 구분선용 */
+    position: relative;
   }}
   th {{
     background: white; font-weight: 500; font-size: 0.905rem;
     color: var(--muted); border-bottom: 1px solid var(--separator);
     padding-top: 14px; padding-bottom: 14px;
   }}
-  /* 세로 구분선 — 셀 중앙에 짧게 위치 (border가 아닌 ::after pseudo) */
-  th:not(:last-child)::after,
-  td:not(:last-child)::after {{
+  /* 세로 구분선 — 헤더 영역에만 (셀 중앙에 짧은 세로 라인) */
+  th:not(:last-child)::after {{
     content: ''; position: absolute; right: 0;
     top: 28%; bottom: 28%; width: 1px;
     background: var(--separator);
@@ -173,7 +172,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td a:hover {{ color: #1d4ed8; }}
   td.mfe-mae {{ font-size: 0.905rem; white-space: nowrap; line-height: 1.35; text-align: right; }}
   td.mfe-mae .row {{ display: block; }}
-  td.stock-col {{ padding: 12px 10px; }}
+  td.stock-col {{ padding: 16px 14px; }}
   td.amount-col {{ font-weight: 600; text-align: right; }}
   /* Stock cell: logo + (sector tag / stock name) */
   .stock-link {{ display: block; text-decoration: none; color: inherit; }}
@@ -232,19 +231,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex-direction: column; align-items: flex-start; gap: 0.15rem;
     }}
     .stat-cell strong {{ font-size: 1.045rem; }}
-    /* 표: 4컬럼 모바일 압축 — 세로 구분선은 유지 */
+    /* 표: 4컬럼 모바일 — 세로 구분선은 헤더에만 + 충분한 padding */
     table {{ font-size: 0.885rem; table-layout: fixed !important; }}
-    /* nth-child로 명시 (colgroup보다 신뢰성↑) */
-    table th:nth-child(1), table td:nth-child(1) {{ width: 50px !important; }}
-    table th:nth-child(3), table td:nth-child(3) {{ width: 56px !important; }}
-    table th:nth-child(4), table td:nth-child(4) {{ width: 56px !important; }}
-    th, td {{ padding: 9px 3px; overflow: hidden; }}
+    table th:nth-child(1), table td:nth-child(1) {{ width: 56px !important; }}
+    table th:nth-child(3), table td:nth-child(3) {{ width: 64px !important; }}
+    table th:nth-child(4), table td:nth-child(4) {{ width: 62px !important; }}
+    th, td {{ padding: 14px 8px; overflow: hidden; }}
     .stock-info {{ overflow: hidden; }}
     .stock-info .stock-name {{
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }}
-    th {{ font-size: 0.805rem; }}
-    td.stock-col {{ padding: 9px 5px; }}
+    th {{ font-size: 0.805rem; padding: 12px 8px; }}
+    td.stock-col {{ padding: 14px 8px; }}
     .stock-logo, .stock-logo-fb {{ width: 26px; height: 26px; }}
     .stock-logo-fb {{ line-height: 26px; font-size: 10px; }}
     .stock-row {{ gap: 6px; }}
