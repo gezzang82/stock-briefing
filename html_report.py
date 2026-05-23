@@ -153,14 +153,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th, td {{
     padding: 12px 10px; border-bottom: 1px solid var(--border);
     text-align: left; vertical-align: middle;
+    position: relative;  /* ::after 구분선용 */
   }}
   th {{
     background: white; font-weight: 500; font-size: 0.905rem;
     color: var(--muted); border-bottom: 1px solid var(--separator);
+    padding-top: 14px; padding-bottom: 14px;
   }}
-  /* Vertical separators between columns */
-  th:not(:last-child), td:not(:last-child) {{
-    border-right: 1px solid var(--border);
+  /* 세로 구분선 — 셀 중앙에 짧게 위치 (border가 아닌 ::after pseudo) */
+  th:not(:last-child)::after,
+  td:not(:last-child)::after {{
+    content: ''; position: absolute; right: 0;
+    top: 28%; bottom: 28%; width: 1px;
+    background: var(--separator);
   }}
   th.align-right, td.align-right {{ text-align: right; }}
   td a {{ color: var(--link); text-decoration: none; }}
@@ -227,8 +232,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex-direction: column; align-items: flex-start; gap: 0.15rem;
     }}
     .stat-cell strong {{ font-size: 1.045rem; }}
-    /* 표: 4컬럼 모바일 압축 — 세로 구분선 제거 (가로 공간 확보) */
-    th:not(:last-child), td:not(:last-child) {{ border-right: none !important; }}
+    /* 표: 4컬럼 모바일 압축 — 세로 구분선은 유지 */
     table {{ font-size: 0.885rem; table-layout: fixed !important; }}
     /* nth-child로 명시 (colgroup보다 신뢰성↑) */
     table th:nth-child(1), table td:nth-child(1) {{ width: 50px !important; }}
