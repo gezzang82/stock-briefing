@@ -41,6 +41,23 @@ def _is_etf_like(name: str) -> bool:
             or any(kw in name for kw in ETF_NAME_KEYWORDS))
 
 
+def _is_force_on_closed_day() -> bool:
+    """
+    --force + 휴장일 동시 만족 여부.
+    KIS가 휴장일에 상태 코드를 비정상으로 반환하는 경우가 있어,
+    테스트 목적 강제 실행 시에만 trade-status 체크를 우회하기 위함.
+    """
+    import sys
+    if "--force" not in sys.argv:
+        return False
+    try:
+        from market_calendar import is_krx_closed
+        closed, _ = is_krx_closed()
+        return closed
+    except Exception:
+        return False
+
+
 def _check_tradeable(pdata: dict) -> tuple[bool, str]:
     """
     KIS inquire-price 응답 필드로 거래 가능 여부 판정.
@@ -133,9 +150,17 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
         # 4) 거래 가능 여부 (관리종목/거래정지/정리매매 등)
         ok, reason = _check_tradeable(pdata)
         if not ok:
-            logger.warning("⚠️ 드롭 [%s] %s — %s", code, kis_name, reason)
-            rejected.append({"code": code, "name": kis_name, "reason": reason})
-            continue
+            if _is_force_on_closed_day():
+                # 휴장일 강제 실행: KIS 상태 코드가 비정상으로 반환되므로
+                # 거래상태 체크는 warning만 남기고 통과시킴
+                logger.warning(
+                    "⚠️ FORCE 모드 (휴장일): 거래상태 이슈 무시 [%s] %s — %s",
+                    code, kis_name, reason,
+                )
+            else:
+                logger.warning("⚠️ 드롭 [%s] %s — %s", code, kis_name, reason)
+                rejected.append({"code": code, "name": kis_name, "reason": reason})
+                continue
 
         # 이름 정정 (hallucination 방지)
         if kis_name != ai_name:
