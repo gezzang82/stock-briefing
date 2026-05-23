@@ -44,7 +44,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   body {{
     font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
                  'Pretendard', 'Noto Sans KR', 'Helvetica Neue', sans-serif;
-    max-width: 760px; margin: 0 auto; padding: 1.2rem 1rem;
+    max-width: 760px; margin: 0 auto; padding: 40px 1rem 1.2rem;
     background: var(--bg); color: var(--text);
     line-height: 1.5;
     -webkit-text-size-adjust: 100%;
@@ -76,7 +76,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .meta-link:hover {{ text-decoration: underline; }}
   /* ── Filter bar (year + month tabs) ── */
   .filter-bar {{
-    display: flex; align-items: center; gap: 0.7rem;
+    display: flex; align-items: center; gap: 4px;
     margin-bottom: 1rem;
     overflow-x: auto; -webkit-overflow-scrolling: touch;
   }}
@@ -288,7 +288,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
   <div class="header-row">
-    <h1>📊 주식 AI 백테스트 리포트</h1>
+    <h1>주식 AI 백테스트 리포트</h1>
     <a href="./workflow.html" class="workflow-link">워크플로우 보기 <span class="chevron">›</span></a>
   </div>
   <ul class="meta">
