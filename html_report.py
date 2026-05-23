@@ -78,17 +78,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   .year-selector {{
     background: white; border: 1px solid var(--border);
-    color: var(--text);
+    color: var(--text); flex-shrink: 0;
     appearance: none; -webkit-appearance: none;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'><path fill='%231d2433' d='M7 10l5 5 5-5z'/></svg>");
     background-repeat: no-repeat; background-position: right 0.8rem center;
     padding-right: 2.1rem;
   }}
   .month-tab {{
-    background: transparent; border: 1px solid transparent;
-    color: var(--muted);
+    background: white; border: 1px solid var(--border);
+    color: var(--text);
+    flex-shrink: 0;  /* 가로 스크롤 시 탭 너비 유지 */
   }}
-  .month-tab:hover {{ color: var(--text); }}
+  .month-tab:hover {{ background: #f8f9fa; }}
   .month-tab.active {{
     background: var(--tab-active); color: white; font-weight: 600;
     border-color: var(--tab-active);
