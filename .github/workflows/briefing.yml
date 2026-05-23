@@ -2,10 +2,13 @@ name: 주식 브리핑
 
 on:
   schedule:
-    # KST 월~금 06:30 = UTC 일~목 21:30 (cron day-of-week: 0=일,1=월...6=토)
-    # 공휴일은 main.py 내부에서 KRX 캘린더로 추가 필터링
-    - cron: '30 21 * * 0-4'
-  workflow_dispatch:         # 수동 실행 버튼 활성화
+    - cron: '30 21 * * 0-4'  # KST 월~금 06:30
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '휴장일 무시하고 강제 실행 (테스트용)'
+        type: boolean
+        default: false
 
 # 동시 실행 방지 - KIS 토큰 중복 발급 차단
 concurrency:
@@ -59,7 +62,12 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python main.py --run-now
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            python main.py --run-now --force
+          else
+            python main.py --run-now
+          fi
 
       - name: GitHub Pages 설정
         if: hashFiles('public/index.html') != ''
