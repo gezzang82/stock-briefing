@@ -145,7 +145,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   table col.col-date {{ width: 68px; }}
   table col.col-stock {{ width: auto; }}
-  table col.col-ret {{ width: 72px; }}
+  table col.col-ret {{ width: 100px; }}
   table col.col-range {{ width: 70px; }}
   table col.sector-name {{ width: auto; }}
   table col.sector-count {{ width: 80px; }}
@@ -175,7 +175,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   td.mfe-mae {{ font-size: 0.905rem; white-space: nowrap; line-height: 1.35; text-align: right; }}
   td.mfe-mae .row {{ display: block; }}
   td.stock-col {{ padding: 16px 14px; }}
-  td.amount-col {{ font-weight: 600; text-align: right; }}
+  td.amount-col {{ font-weight: 600; text-align: center; }}
   /* Stock cell: logo + (sector tag / stock name) */
   .stock-link {{ display: block; text-decoration: none; color: inherit; }}
   .stock-row {{ display: flex; align-items: center; gap: 10px; }}
@@ -236,7 +236,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     /* 표: 4컬럼 모바일 — 세로 구분선은 헤더에만 + 충분한 padding */
     table {{ font-size: 0.885rem; table-layout: fixed !important; }}
     table th:nth-child(1), table td:nth-child(1) {{ width: 60px !important; }}
-    table th:nth-child(3), table td:nth-child(3) {{ width: 80px !important; }}
+    table th:nth-child(3), table td:nth-child(3) {{ width: 95px !important; }}
     table th:nth-child(4), table td:nth-child(4) {{ width: 70px !important; }}
     th, td {{ padding: 14px 8px; overflow: hidden; }}
     .stock-info {{ overflow: hidden; }}
