@@ -195,10 +195,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th.align-center, td.align-center {{ text-align: center; }}
   /* 섹터별 성과 표 — 본문 셀 좌우(width) padding 2배 */
   .sector-table tbody td {{ padding: 16px 28px; }}
-  .sector-icon {{
-    display: inline-block; font-size: 1.15em;
-    margin-right: 8px; vertical-align: middle;
-    line-height: 1;
+  /* 섹터명 앞 컬러 dot — 종목 표 sector tag와 같은 색 */
+  .sector-dot {{
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 10px;
+    vertical-align: middle;
   }}
   td a {{ color: var(--link); text-decoration: none; }}
   td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
@@ -561,10 +562,12 @@ def _sector_table(sectors: list[dict]) -> str:
     for s in sectors:
         cls = "up" if s["avg_return"] >= 0 else "down"
         sign = "▲" if s["avg_return"] >= 0 else "▼"
-        icon = _sector_icon(s["sector"])
+        # 섹터 컬러 dot — 종목 표의 sector tag와 일관된 컬러 시그널
+        color = _sector_color(s["sector"])
+        dot = f'<span class="sector-dot" style="background:{color}"></span>'
         rows.append(
             f"<tr>"
-            f'<td><span class="sector-icon">{icon}</span>{s["sector"]}</td>'
+            f'<td>{dot}{s["sector"]}</td>'
             f'<td class="align-center">{s["total"]}</td>'
             f'<td class="align-right {cls}">{sign}{abs(s["avg_return"]):.2f}%</td>'
             f"</tr>"
