@@ -309,9 +309,11 @@ def _one_recommendation_pass(
     news_text: str, kospi_display: str, kosdaq_display: str,
     recent: list[dict], tech_text: str, regime_text: str,
     excluded_codes: set[str],
+    signal_perf_text: str = "",
 ) -> tuple[dict, list[dict], dict, list[dict]]:
     """
     AI 호출 → 검증 1회. excluded_codes는 회피 힌트로 전달.
+    signal_perf_text: 과거 시그널 성과 (참고용, 비면 AI 프롬프트에서 섹션 생략)
     Returns (analysis, cleaned, price_map, rejected)
     """
     extra_exclude = [
@@ -326,6 +328,7 @@ def _one_recommendation_pass(
         recent_excluded=excluded_for_ai,
         tech_candidates_text=tech_text,
         regime_text=regime_text,
+        signal_performance_text=signal_perf_text,
     )
     cleaned, price_map, rejected = _validate_and_clean_recommendations(
         analysis["recommendations"]
@@ -380,6 +383,21 @@ def run_daily_briefing():
         logger.warning("기술적 스크리닝 실패 — 뉴스 기반으로 폴백: %s", e)
         tech_text = ""
 
+    # 4a-feedback. 시그널 성과 피드백 로드 (참고용, 빈 결과면 섹션 생략됨)
+    # ⚠️ 추천 로직은 그대로 — AI 프롬프트에만 텍스트로 추가됨.
+    signal_perf_text = ""
+    try:
+        from signal_performance import (
+            load_cached_performance,
+            format_for_prompt as fmt_signal_perf,
+        )
+        signal_perf_text = fmt_signal_perf(load_cached_performance())
+        if signal_perf_text:
+            logger.info("시그널 성과 피드백 적용 (AI 참고용)")
+    except Exception as e:
+        logger.debug("시그널 성과 피드백 로드 실패 (무시): %s", e)
+        signal_perf_text = ""
+
     # 4b. AI 추천 + 검증 (필요 시 재시도)
     recent = get_recent_recommended_stocks(days=7)
     logger.info("최근 7일 추천 이력: %d개 종목 (회피 힌트로 전달)", len(recent))
@@ -402,6 +420,7 @@ def run_daily_briefing():
         analysis, pass_cleaned, pass_pmap, pass_rejected = _one_recommendation_pass(
             news_text, kospi_display, kosdaq_display, recent,
             tech_text, regime_text, excluded_codes,
+            signal_perf_text=signal_perf_text,
         )
         all_rejected.extend(pass_rejected)
 

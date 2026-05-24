@@ -29,7 +29,7 @@ KOSDAQ: {kosdaq}
 === 기술적 분석 상위 후보 (거래량/모멘텀/돌파 기반 스크리닝) ===
 {tech_candidates}
 
-=== 최근 7일 이미 추천된 종목 (가급적 제외) ===
+{signal_performance}=== 최근 7일 이미 추천된 종목 (가급적 제외) ===
 {recent_excluded}
 
 위 정보를 바탕으로 다음 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
@@ -107,16 +107,24 @@ def analyze_and_recommend(
     recent_excluded: list[dict] | None = None,
     tech_candidates_text: str = "",
     regime_text: str = "",
+    signal_performance_text: str = "",
 ) -> dict:
     """
     뉴스 + 시장지표 + 기술적 스크리닝 후보를 종합해 추천 종목 반환.
     recent_excluded: 최근 7일 추천 종목 회피 힌트
     tech_candidates_text: 기술적 스크리너가 생성한 후보 포맷 문자열
+    signal_performance_text: 과거 시그널 성과 (참고용, 비면 섹션 생략)
     """
     client = OpenAI(api_key=OPENAI_API_KEY)
 
     # 검증에서 일부 드롭될 가능성을 고려해 버퍼 포함하여 더 많이 요청
     ai_n = TOP_N_STOCKS + 3
+    # 시그널 성과 섹션은 비어있으면 통째로 생략 (불필요한 공백 줄 방지)
+    signal_perf_block = (
+        signal_performance_text + "\n\n"
+        if signal_performance_text.strip()
+        else ""
+    )
     prompt = ANALYSIS_PROMPT.format(
         n=ai_n,
         date=date.today().strftime("%Y년 %m월 %d일"),
@@ -126,6 +134,7 @@ def analyze_and_recommend(
         recent_excluded=_format_recent_excluded(recent_excluded),
         tech_candidates=tech_candidates_text or "(기술적 스크리닝 결과 없음 — 뉴스 기반으로만 선정)",
         regime_text=regime_text or "(시장 상태 데이터 없음 — 기본 균형 전략)",
+        signal_performance=signal_perf_block,
     )
 
     logger.info("AI 분석 시작...")

@@ -44,6 +44,12 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
         run: python weekly_report.py
 
+      - name: 시그널 성과 분석 캐시 갱신
+        # 과거 추천 outcome → 시그널 버킷 통계를 signal_performance_cache에 저장.
+        # AI 프롬프트에 참고용으로만 삽입되며, 실패해도 주간 리포트 흐름은 유지.
+        continue-on-error: true
+        run: python signal_performance.py
+
       - name: Kakao 토큰 자동 갱신 반영
         if: success() && hashFiles('/tmp/kakao_tokens_new.json') != ''
         env:

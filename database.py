@@ -67,6 +67,13 @@ CREATE TABLE IF NOT EXISTS snapshot_logs (
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+CREATE TABLE IF NOT EXISTS signal_performance_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    months INTEGER,
+    result_json TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_rec_date ON recommendations(rec_date);
 CREATE INDEX IF NOT EXISTS idx_track_date ON price_tracking(track_date);
 CREATE INDEX IF NOT EXISTS idx_tracking_code ON price_tracking(stock_code, rec_date);
@@ -267,6 +274,51 @@ def get_snapshot_by_date(snapshot_date: str) -> dict | None:
         logger.warning("Snapshot JSON 파싱 실패 [%s]: %s", snapshot_date, e)
         result["snapshot_data"] = None
     return result
+
+
+def save_signal_performance(months: int, result: dict) -> bool:
+    """
+    시그널 성과 분석 결과를 캐시 테이블에 저장.
+    실패해도 raise하지 않음 — 분석 자체는 read-only이므로 호출자 영향 최소화.
+    """
+    try:
+        result_json = json.dumps(result, ensure_ascii=False, default=str)
+    except Exception as e:
+        logger.warning("signal_performance JSON 직렬화 실패: %s", e)
+        return False
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                """INSERT INTO signal_performance_cache (months, result_json)
+                   VALUES (?, ?)""",
+                (months, result_json),
+            )
+        return True
+    except Exception as e:
+        logger.warning("signal_performance DB 저장 실패: %s", e)
+        return False
+
+
+def get_latest_signal_performance() -> dict:
+    """
+    최신 시그널 성과 캐시 로드. 없거나 파싱 실패 시 {} 반환.
+    """
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                """SELECT result_json FROM signal_performance_cache
+                   ORDER BY id DESC LIMIT 1"""
+            ).fetchone()
+    except Exception as e:
+        logger.debug("signal_performance 조회 실패: %s", e)
+        return {}
+    if not row:
+        return {}
+    try:
+        return json.loads(row["result_json"])
+    except Exception as e:
+        logger.warning("signal_performance JSON 파싱 실패: %s", e)
+        return {}
 
 
 def get_recent_recommended_stocks(days: int = 7) -> list[dict]:
