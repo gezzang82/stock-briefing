@@ -26,6 +26,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2">
 <title>주식 AI 백테스트 리포트</title>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
   :root {{
     --bg: #f6f7f9;
@@ -195,11 +196,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th.align-center, td.align-center {{ text-align: center; }}
   /* 섹터별 성과 표 — 본문 셀 좌우(width) padding 2배 */
   .sector-table tbody td {{ padding: 16px 28px; }}
-  /* 섹터명 앞 컬러 dot — 종목 표 sector tag와 같은 색 */
-  .sector-dot {{
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; margin-right: 10px;
-    vertical-align: middle;
+  /* 섹터명 앞 Lucide 아이콘 (섹터 컬러로 stroke) */
+  .sector-icon {{
+    display: inline-block; width: 18px; height: 18px;
+    margin-right: 10px; vertical-align: middle;
+    stroke-width: 2;
   }}
   td a {{ color: var(--link); text-decoration: none; }}
   td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
@@ -371,6 +372,8 @@ function showMore(btn, step) {{
   }}
 }}
 {scripts}
+// Lucide 아이콘 렌더링 (모든 <i data-lucide="x"> → <svg>)
+if (window.lucide) {{ lucide.createIcons(); }}
 </script>
 </body>
 </html>
@@ -401,31 +404,30 @@ _SECTOR_COLORS = {
 }
 _SECTOR_FB_PALETTE = ["#5dade2", "#af7ac5", "#48c9b0", "#f5b041", "#ec7063", "#5d6d7e"]
 
-# 섹터별 이모지 아이콘 (substring 매칭)
-_SECTOR_ICONS = {
-    "반도체": "💾", "AI": "🤖", "IT": "💻",
-    "2차전지": "🔋", "배터리": "🔋",
-    "바이오": "🧬", "제약": "💊", "헬스": "🏥",
-    "자동차": "🚗", "운송": "🚚",
-    "화학": "🧪", "에너지": "⚡",
-    "금융": "🏦", "증권": "📈", "보험": "🛡️",
-    "통신": "📡", "미디어": "📺", "엔터": "🎬",
-    "건설": "🏗️", "유통": "🛒", "음식료": "🍽️",
-    "조선": "🚢", "철강": "⚙️", "방산": "🛡️",
-    "소비재": "🛍️", "제조": "🏭", "소재": "🧱",
-    "원자력": "☢️", "전력": "⚡",
-    "전자": "📱", "전선": "🔌",
+# 섹터 → Lucide 아이콘 이름 (substring 매칭, 라이선스: ISC, 무료)
+_SECTOR_LUCIDE = {
+    "반도체": "cpu", "전자": "cpu", "AI": "brain-circuit", "IT": "monitor",
+    "2차전지": "battery-charging", "배터리": "battery",
+    "바이오": "dna", "제약": "pill", "헬스": "heart-pulse",
+    "자동차": "car", "운송": "truck",
+    "화학": "flask-conical", "에너지": "zap", "원자력": "atom", "전력": "zap",
+    "금융": "landmark", "증권": "trending-up", "보험": "shield",
+    "통신": "radio-tower", "미디어": "tv", "엔터": "clapperboard",
+    "건설": "building-2", "유통": "shopping-cart", "음식료": "utensils",
+    "조선": "ship", "철강": "factory", "방산": "shield",
+    "소비재": "shopping-bag", "제조": "factory", "소재": "package",
+    "전선": "cable",
 }
 
 
-def _sector_icon(sector: str | None) -> str:
-    """섹터 키워드 매칭 아이콘. 없으면 기본 아이콘."""
+def _sector_lucide_name(sector: str | None) -> str:
+    """섹터 키워드에 매칭되는 Lucide 아이콘 이름 (기본: circle)."""
     if not sector or sector == "-":
-        return "📊"
-    for keyword, icon in _SECTOR_ICONS.items():
+        return "circle"
+    for keyword, name in _SECTOR_LUCIDE.items():
         if keyword in sector:
-            return icon
-    return "📊"
+            return name
+    return "circle"
 
 
 def _sector_color(sector: str | None) -> str:
@@ -562,12 +564,16 @@ def _sector_table(sectors: list[dict]) -> str:
     for s in sectors:
         cls = "up" if s["avg_return"] >= 0 else "down"
         sign = "▲" if s["avg_return"] >= 0 else "▼"
-        # 섹터 컬러 dot — 종목 표의 sector tag와 일관된 컬러 시그널
+        # Lucide 아이콘 (섹터 컬러로 stroke)
         color = _sector_color(s["sector"])
-        dot = f'<span class="sector-dot" style="background:{color}"></span>'
+        icon_name = _sector_lucide_name(s["sector"])
+        icon = (
+            f'<i data-lucide="{icon_name}" class="sector-icon" '
+            f'style="color:{color}"></i>'
+        )
         rows.append(
             f"<tr>"
-            f'<td>{dot}{s["sector"]}</td>'
+            f'<td>{icon}{s["sector"]}</td>'
             f'<td class="align-center">{s["total"]}</td>'
             f'<td class="align-right {cls}">{sign}{abs(s["avg_return"]):.2f}%</td>'
             f"</tr>"
