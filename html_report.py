@@ -269,9 +269,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .stat-cell strong {{ font-size: 1.045rem; }}
     /* 표: 4컬럼 모바일 — 세로 구분선은 헤더에만 + 충분한 padding */
     table {{ font-size: 0.885rem; table-layout: fixed !important; }}
-    table th:nth-child(1), table td:nth-child(1) {{ width: 60px !important; }}
-    table th:nth-child(3), table td:nth-child(3) {{ width: 95px !important; }}
-    table th:nth-child(4), table td:nth-child(4) {{ width: 70px !important; }}
+    /* 종목 표(4컬럼) 전용 너비 — :not(.sector-table)로 섹터 표 제외 */
+    table:not(.sector-table) th:nth-child(1),
+    table:not(.sector-table) td:nth-child(1) {{ width: 60px !important; }}
+    table:not(.sector-table) th:nth-child(3),
+    table:not(.sector-table) td:nth-child(3) {{ width: 95px !important; }}
+    table:not(.sector-table) th:nth-child(4),
+    table:not(.sector-table) td:nth-child(4) {{ width: 70px !important; }}
+    /* 섹터 표(3컬럼) 전용 — 섹터명 column이 넓게 차지하도록 */
+    .sector-table th:nth-child(1),
+    .sector-table td:nth-child(1) {{ width: auto !important; }}
+    .sector-table th:nth-child(2),
+    .sector-table td:nth-child(2) {{ width: 70px !important; }}
+    .sector-table th:nth-child(3),
+    .sector-table td:nth-child(3) {{ width: 100px !important; }}
     th, td {{ padding: 14px 8px; overflow: hidden; }}
     .stock-info {{ overflow: hidden; }}
     .stock-info .stock-name {{
