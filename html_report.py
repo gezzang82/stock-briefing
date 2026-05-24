@@ -178,7 +178,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     position: relative;
   }}
   th {{
-    background: white; font-weight: 500; font-size: 0.905rem;
+    background: #fafbfc;  /* 본문과 살짝 구분되는 옅은 회색 배경 */
+    font-weight: 500; font-size: 0.905rem;
     color: var(--muted); border-bottom: 1px solid var(--separator);
     padding-top: 14px; padding-bottom: 14px;
     text-align: center;  /* 헤더 텍스트만 중앙 정렬 (body td는 영향 없음) */
