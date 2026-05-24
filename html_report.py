@@ -65,8 +65,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   .workflow-link:hover {{ opacity: 0.8; }}
   .workflow-link .chevron {{
-    display: inline-block; margin-left: 0.15rem;
-    font-weight: 600;
+    display: inline-block; margin-left: 0.35rem;
+    vertical-align: middle; margin-bottom: 2px;
   }}
   .meta {{
     color: var(--muted); font-size: 0.945rem;
@@ -310,7 +310,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
   <div class="header-row">
     <h1>주식 AI 백테스트 리포트</h1>
-    <a href="./workflow.html" class="workflow-link">워크플로우 보기 <span class="chevron">›</span></a>
+    <a href="./workflow.html" class="workflow-link">워크플로우 보기 <svg class="chevron" width="4" height="7" viewBox="0 0 4 7" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.5 0.5L3.5 3.5L0.5 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
   </div>
   <ul class="meta">
     <li>최종 업데이트 : {updated_at} KST</li>
