@@ -195,6 +195,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th.align-center, td.align-center {{ text-align: center; }}
   /* 섹터별 성과 표 — 본문 셀 좌우(width) padding 2배 */
   .sector-table tbody td {{ padding: 16px 28px; }}
+  .sector-icon {{
+    display: inline-block; font-size: 1.15em;
+    margin-right: 8px; vertical-align: middle;
+    line-height: 1;
+  }}
   td a {{ color: var(--link); text-decoration: none; }}
   td a:not(.stock-link) {{ border-bottom: 1px dashed #b9d6e8; }}
   td a:hover {{ color: #1d4ed8; }}
@@ -395,6 +400,32 @@ _SECTOR_COLORS = {
 }
 _SECTOR_FB_PALETTE = ["#5dade2", "#af7ac5", "#48c9b0", "#f5b041", "#ec7063", "#5d6d7e"]
 
+# 섹터별 이모지 아이콘 (substring 매칭)
+_SECTOR_ICONS = {
+    "반도체": "💾", "AI": "🤖", "IT": "💻",
+    "2차전지": "🔋", "배터리": "🔋",
+    "바이오": "🧬", "제약": "💊", "헬스": "🏥",
+    "자동차": "🚗", "운송": "🚚",
+    "화학": "🧪", "에너지": "⚡",
+    "금융": "🏦", "증권": "📈", "보험": "🛡️",
+    "통신": "📡", "미디어": "📺", "엔터": "🎬",
+    "건설": "🏗️", "유통": "🛒", "음식료": "🍽️",
+    "조선": "🚢", "철강": "⚙️", "방산": "🛡️",
+    "소비재": "🛍️", "제조": "🏭", "소재": "🧱",
+    "원자력": "☢️", "전력": "⚡",
+    "전자": "📱", "전선": "🔌",
+}
+
+
+def _sector_icon(sector: str | None) -> str:
+    """섹터 키워드 매칭 아이콘. 없으면 기본 아이콘."""
+    if not sector or sector == "-":
+        return "📊"
+    for keyword, icon in _SECTOR_ICONS.items():
+        if keyword in sector:
+            return icon
+    return "📊"
+
 
 def _sector_color(sector: str | None) -> str:
     if not sector or sector == "-":
@@ -530,9 +561,10 @@ def _sector_table(sectors: list[dict]) -> str:
     for s in sectors:
         cls = "up" if s["avg_return"] >= 0 else "down"
         sign = "▲" if s["avg_return"] >= 0 else "▼"
+        icon = _sector_icon(s["sector"])
         rows.append(
             f"<tr>"
-            f"<td>{s['sector']}</td>"
+            f'<td><span class="sector-icon">{icon}</span>{s["sector"]}</td>'
             f'<td class="align-center">{s["total"]}</td>'
             f'<td class="align-right {cls}">{sign}{abs(s["avg_return"]):.2f}%</td>'
             f"</tr>"
