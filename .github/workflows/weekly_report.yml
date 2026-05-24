@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Python 3.11 설정
         uses: actions/setup-python@v5
@@ -33,17 +35,6 @@ jobs:
 
       - name: 패키지 설치
         run: pip install -r requirements.txt
-
-      - name: DB 캐시 복원 (읽기 전용)
-        uses: actions/cache@v4
-        with:
-          path: |
-            stock_briefing.db
-            .kis_token_cache
-          key: stock-state-report-${{ github.run_id }}
-          restore-keys: |
-            stock-state-
-            stock-db-
 
       - name: 주간 리포트 실행
         env:
@@ -62,6 +53,20 @@ jobs:
           NEW_REFRESH=$(python3 -c "import json; d=json.load(open('/tmp/kakao_tokens_new.json')); print(d.get('refresh_token',''))")
           [ -n "$NEW_ACCESS" ] && printf '%s' "$NEW_ACCESS" | gh secret set KAKAO_ACCESS_TOKEN --repo ${{ github.repository }}
           [ -n "$NEW_REFRESH" ] && printf '%s' "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo ${{ github.repository }}
+
+      - name: DB 변경사항 자동 커밋
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain stock_briefing.db)" ]; then
+            git add stock_briefing.db
+            git commit -m "chore(db): 주간 리포트 실행 결과 반영 ($(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST'))"
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "DB 변경 없음 — 커밋 생략"
+          fi
 
       - name: GitHub Pages 설정
         if: hashFiles('public/index.html') != ''

@@ -3,7 +3,9 @@
 .kis_token_cache
 venv/
 logs/
+# stock_briefing.db는 레포에 커밋 (누적 데이터 보존)
 *.db
+!stock_briefing.db
 __pycache__/
 *.pyc
 *.pyo

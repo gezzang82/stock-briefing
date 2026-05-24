@@ -15,9 +15,9 @@ concurrency:
   group: stock-briefing
   cancel-in-progress: false
 
-# GitHub Pages 배포 권한
+# GitHub Pages 배포 + DB 자동 커밋 권한
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -31,6 +31,9 @@ jobs:
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
+        with:
+          # 푸시 권한이 있는 토큰으로 체크아웃 (DB 자동 커밋용)
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Python 3.11 설정
         uses: actions/setup-python@v5
@@ -41,16 +44,13 @@ jobs:
       - name: 패키지 설치
         run: pip install -r requirements.txt
 
-      - name: DB / KIS 토큰 캐시 복원
+      - name: KIS 토큰 캐시 복원
         uses: actions/cache@v4
         with:
-          path: |
-            stock_briefing.db
-            .kis_token_cache
-          key: stock-state-${{ github.run_id }}
+          path: .kis_token_cache
+          key: kis-token-${{ github.run_id }}
           restore-keys: |
-            stock-state-
-            stock-db-
+            kis-token-
 
       - name: 브리핑 실행
         env:
@@ -86,6 +86,21 @@ jobs:
           if [ -n "$NEW_REFRESH" ]; then
             echo "Kakao refresh_token 갱신 → Secret 업데이트"
             printf '%s' "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo ${{ github.repository }}
+          fi
+
+      - name: DB 변경사항 자동 커밋
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain stock_briefing.db)" ]; then
+            git add stock_briefing.db
+            git commit -m "chore(db): 브리핑 실행 결과 반영 ($(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST'))"
+            # 동시 푸시 충돌 방지를 위해 rebase pull
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "DB 변경 없음 — 커밋 생략"
           fi
 
       - name: GitHub Pages 설정
