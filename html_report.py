@@ -178,6 +178,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     text-align: left; vertical-align: middle;
     position: relative;
   }}
+  /* 마지막 행은 하단 라인 제거 */
+  tbody tr:last-child td {{ border-bottom: none; }}
   th {{
     background: var(--bg);  /* 페이지 배경색과 동일 (#f6f7f9) */
     font-weight: 500; font-size: 0.905rem;
