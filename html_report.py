@@ -253,13 +253,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   /* Up/Down colors */
   .up {{ color: var(--up); font-weight: 600; }}
   .down {{ color: var(--down); font-weight: 600; }}
-  .table-wrap {{ overflow-x: auto; }}
+  /* 테이블은 좌우 끝까지 꽉 차게 (body padding을 음수 margin으로 상쇄) */
+  .table-wrap {{
+    overflow-x: auto;
+    margin-left: -1rem; margin-right: -1rem;
+  }}
+  /* 첫/마지막 셀에 body padding만큼 보정 (내용이 화면 가장자리에 안 닿게) */
+  .table-wrap th:first-child, .table-wrap td:first-child {{ padding-left: 1rem; }}
+  .table-wrap th:last-child, .table-wrap td:last-child {{ padding-right: 1rem; }}
   /* Responsive */
   @media (max-width: 480px) {{
     body {{ padding: 0.9rem 0.7rem; }}
     h1 {{ font-size: 1.275rem; }}
     .workflow-link {{ font-size: 0.825rem; }}
     .meta {{ font-size: 0.905rem; }}
+    /* 모바일도 body padding(0.7rem)에 맞춰 음수 margin 조정 */
+    .table-wrap {{ margin-left: -0.7rem; margin-right: -0.7rem; }}
+    .table-wrap th:first-child, .table-wrap td:first-child {{ padding-left: 0.7rem; }}
+    .table-wrap th:last-child, .table-wrap td:last-child {{ padding-right: 0.7rem; }}
     .month-card {{ padding: 1.1rem 0.9rem; }}
     .month-title {{ font-size: 1.375rem; }}
     .chart {{ height: 280px; }}
