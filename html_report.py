@@ -163,7 +163,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   table {{
     width: 100%; border-collapse: collapse;
     margin-top: 0.5rem; font-size: 0.975rem;
-    background: var(--card); border-radius: 12px; overflow: hidden;
+    background: var(--card); border-radius: 0; overflow: hidden;
     table-layout: fixed;
   }}
   table col.col-date {{ width: 68px; }}
