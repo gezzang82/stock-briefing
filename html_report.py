@@ -96,9 +96,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: white; border: 1px solid var(--border);
     color: var(--text); flex-shrink: 0;
     appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'><path fill='%231d2433' d='M7 10l5 5 5-5z'/></svg>");
-    background-repeat: no-repeat; background-position: right 0.8rem center;
-    padding-right: 2.1rem;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M0.75 0.75L4.75 4.75L8.75 0.75' stroke='%231d2433' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 0.9rem center;
+    padding-right: 2rem;
   }}
   .month-tab {{
     background: white; border: 1px solid var(--border);
