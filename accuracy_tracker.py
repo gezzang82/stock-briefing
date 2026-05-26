@@ -2,9 +2,11 @@
 추천 종목 적중률 계산 모듈
 - 매일 추천 종목의 현재가를 DB에 저장
 - 2주 후 수익률 계산 및 적중률 집계
+
+⚠️ 모든 날짜 계산은 KST 기준 (GitHub Actions 러너 UTC와 시차 9시간).
 """
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from config import HIT_THRESHOLD_PCT, TRACKING_DAYS
 from database import (
@@ -12,6 +14,12 @@ from database import (
     get_tracking_data, save_accuracy, save_price_tracking, update_entry_price,
 )
 from kis_api import kis
+from market_calendar import KST
+
+
+def _today_kst() -> date:
+    """KST 기준 오늘 날짜 (UTC 러너에서도 한국 영업일 기준으로 동작)."""
+    return datetime.now(KST).date()
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +30,7 @@ def record_today_prices(rec_date: str):
     if not recs:
         return
 
-    today = date.today().isoformat()
+    today = _today_kst().isoformat()
     for r in recs:
         price_data = kis.get_stock_price(r["stock_code"])
         if not price_data:
@@ -50,7 +58,7 @@ def record_today_prices(rec_date: str):
 
 def record_prices_for_active_recs():
     """현재 추적 중인 모든 추천일(2주 미만)에 대해 오늘 가격 기록"""
-    today = date.today()
+    today = _today_kst()
     cutoff = (today - timedelta(days=TRACKING_DAYS)).isoformat()
 
     from database import get_conn
@@ -172,7 +180,7 @@ def calculate_accuracy(rec_date: str):
 
 def update_accuracy():
     """만기(2주 경과)된 추천일에 대해 적중률 계산 실행"""
-    today = date.today()
+    today = _today_kst()
     maturity_cutoff = (today - timedelta(days=TRACKING_DAYS)).isoformat()
 
     rec_dates = get_mature_recs(maturity_cutoff)
@@ -237,9 +245,9 @@ def get_monthly_tier_stats(year_month: str | None = None) -> dict:
     None이면 현재 월.
     """
     if year_month is None:
-        year_month = date.today().strftime("%Y-%m")
+        year_month = _today_kst().strftime("%Y-%m")
 
-    today = date.today()
+    today = _today_kst()
 
     from database import get_conn
     with get_conn() as conn:
