@@ -74,18 +74,22 @@ jobs:
             echo "DB 변경 없음 — 커밋 생략"
           fi
 
+      # GitHub codeload.github.com 일시 장애 대비 — 핵심 작업 보존용 continue-on-error
       - name: GitHub Pages 설정
         if: hashFiles('public/index.html') != ''
+        continue-on-error: true
         uses: actions/configure-pages@v4
 
       - name: Pages 아티팩트 업로드
         if: hashFiles('public/index.html') != ''
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
 
       - name: GitHub Pages 배포
         if: hashFiles('public/index.html') != ''
+        continue-on-error: true
         id: deployment
         uses: actions/deploy-pages@v4
 
