@@ -58,28 +58,28 @@ jobs:
           [ -n "$NEW_ACCESS" ] && printf '%s' "$NEW_ACCESS" | gh secret set KAKAO_ACCESS_TOKEN --repo ${{ github.repository }}
           [ -n "$NEW_REFRESH" ] && printf '%s' "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo ${{ github.repository }}
 
-      - name: DB 변경사항 자동 커밋
+      - name: DB + 대시보드 자동 커밋
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain stock_briefing.db)" ]; then
-            git add stock_briefing.db
-            git commit -m "chore(db): 주간 리포트 실행 결과 반영 ($(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST'))"
+          if [ -n "$(git status --porcelain stock_briefing.db public/)" ]; then
+            git add stock_briefing.db public/ 2>/dev/null || git add stock_briefing.db
+            git commit -m "chore: 주간 리포트 + 대시보드 갱신 ($(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST'))"
             git pull --rebase origin ${{ github.ref_name }} || true
             git push origin HEAD:${{ github.ref_name }}
           else
-            echo "DB 변경 없음 — 커밋 생략"
+            echo "변경 없음 — 커밋 생략"
           fi
 
-      # ⚠️ GitHub codeload 전반 장애로 Pages 관련 액션 모두 일시 제거. 복구 후 다시 추가.
+      # GitHub Pages는 Settings → Pages → Source = "Deploy from a branch", Branch = main /public.
 
       - name: 실행 결과 요약
         if: always()
         run: |
           echo "## 주간 리포트 실행" >> $GITHUB_STEP_SUMMARY
           echo "- 시각 (KST): $(TZ='Asia/Seoul' date)" >> $GITHUB_STEP_SUMMARY
-          echo "- 대시보드: ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 대시보드: https://gezzang82.github.io/stock-briefing/" >> $GITHUB_STEP_SUMMARY
 
       - name: 실패 시 카카오톡 알림
         if: failure()

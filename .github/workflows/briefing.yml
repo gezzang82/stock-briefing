@@ -91,25 +91,25 @@ jobs:
             printf '%s' "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo ${{ github.repository }}
           fi
 
-      - name: DB 변경사항 자동 커밋
+      - name: DB + 대시보드 자동 커밋
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain stock_briefing.db)" ]; then
-            git add stock_briefing.db
-            git commit -m "chore(db): 브리핑 실행 결과 반영 ($(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST'))"
+          # DB와 public/(대시보드 HTML) 둘 다 변경분 확인
+          if [ -n "$(git status --porcelain stock_briefing.db public/)" ]; then
+            git add stock_briefing.db public/ 2>/dev/null || git add stock_briefing.db
+            git commit -m "chore: 브리핑 결과 + 대시보드 갱신 ($(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST'))"
             # 동시 푸시 충돌 방지를 위해 rebase pull
             git pull --rebase origin ${{ github.ref_name }} || true
             git push origin HEAD:${{ github.ref_name }}
           else
-            echo "DB 변경 없음 — 커밋 생략"
+            echo "변경 없음 — 커밋 생략"
           fi
 
-      # ⚠️ GitHub codeload 전반 장애로 Pages 관련 액션 모두 일시 제거.
-      # public/index.html은 브리핑 실행에서 생성되어 main에 자동 커밋되므로
-      # GitHub Pages가 main의 public/을 직접 서빙하도록 설정돼있으면 자동 반영됨.
-      # codeload 복구 후 actions/configure-pages, upload-pages-artifact, deploy-pages 다시 추가.
+      # GitHub Pages는 Repo Settings → Pages → Source = "Deploy from a branch"
+      # → Branch: main / Folder: /public 으로 설정해두면 자동 서빙.
+      # codeload 외부 액션 의존성 없음.
 
       - name: 실행 결과 요약
         if: always()
