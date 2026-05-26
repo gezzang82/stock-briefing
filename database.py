@@ -321,6 +321,27 @@ def get_latest_signal_performance() -> dict:
         return {}
 
 
+def has_recommendations_for_date(target_date: str) -> bool:
+    """
+    해당 날짜에 추천 데이터가 이미 존재하는지 확인 (멱등성 가드용).
+    같은 날 백업 cron이 여러 번 실행되어도 1회만 실제 진행되도록 사용.
+
+    Graceful fallback: 테이블 없음 / 컬럼 변경 / 그 외 어떤 에러에도
+    False를 반환해서 호출자가 자연스럽게 정상 실행 흐름으로 진입하게 함.
+    """
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM recommendations WHERE rec_date = ? LIMIT 1",
+                (target_date,),
+            ).fetchone()
+        return row is not None
+    except Exception as e:
+        # 테이블 미존재(첫 실행) / 스키마 변경 / 기타 — 모두 안전하게 False
+        logger.debug("has_recommendations_for_date 체크 실패 (무시): %s", e)
+        return False
+
+
 def get_recent_recommended_stocks(days: int = 7) -> list[dict]:
     """최근 N일간 추천된 고유 종목 (중복 횟수 포함). AI에 회피 힌트로 전달"""
     from datetime import date as _date, timedelta

@@ -2,7 +2,12 @@ name: 주식 브리핑
 
 on:
   schedule:
-    - cron: '30 21 * * 0-4'  # KST 월~금 06:30
+    # GitHub Actions schedule은 가끔 지연/누락됨 → 백업 cron으로 보완.
+    # briefing.py의 has_recommendations_for_date() 멱등성 가드가
+    # 같은 날 중복 실행을 자동으로 차단함.
+    - cron: '30 21 * * 0-4'  # 주 실행 — KST 월~금 06:30
+    - cron: '15 22 * * 0-4'  # 백업1 — KST 월~금 07:15
+    - cron: '0 23 * * 0-4'   # 백업2 — KST 월~금 08:00
   workflow_dispatch:
     inputs:
       force:

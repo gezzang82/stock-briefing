@@ -2,12 +2,17 @@
 주식 브리핑 메인 오케스트레이터
 """
 import logging
-from datetime import date
+import sys
+from datetime import date, datetime
 
 from accuracy_tracker import format_accuracy_summary, record_prices_for_active_recs
 from ai_analyzer import analyze_and_recommend
-from database import get_recent_recommended_stocks, init_db, save_recommendations
+from database import (
+    get_recent_recommended_stocks, has_recommendations_for_date,
+    init_db, save_recommendations,
+)
 from kis_api import kis
+from market_calendar import KST
 from news_fetcher import fetch_financial_news
 
 logger = logging.getLogger(__name__)
@@ -338,7 +343,23 @@ def _one_recommendation_pass(
 
 def run_daily_briefing():
     """메인 브리핑 실행"""
-    today = date.today().isoformat()
+    # ───── 날짜는 KST 기준 (UTC 러너에서도 한국 영업일 기준 동작) ─────
+    today = datetime.now(KST).date().isoformat()
+    logger.info("🕒 KST 기준 오늘 날짜: %s", today)
+
+    # ───── 멱등성 가드 — 백업 cron 중복 실행 방지 ─────
+    # briefing.yml에 백업 cron이 다중 등록되어 있어 같은 날 여러 번 호출될 수 있음.
+    # 이미 오늘 추천이 저장된 경우 정상 종료해서 카톡/대시보드 중복 발송 방지.
+    # `--force` 플래그가 있으면 무시 (수동 재실행/디버깅용).
+    is_force = "--force" in sys.argv
+    if is_force:
+        logger.warning("⚠️ FORCE 실행 — 멱등성 체크 무시")
+    elif has_recommendations_for_date(today):
+        logger.info("⏭️ 오늘 브리핑 이미 존재 — 중복 실행 skip")
+        return
+    else:
+        logger.info("오늘 브리핑 데이터 없음 — 정상 진행")
+
     logger.info("=== %s 주식 브리핑 시작 ===", today)
 
     # 1. DB 초기화
