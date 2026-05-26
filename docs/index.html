@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2">
+<title>주식 AI 백테스트 리포트</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1d2433;
+    --muted: #8b95a1;
+    --border: #eef0f3;
+    --separator: #e5e8ec;
+    --pill-bg: #f1f3f5;
+    --tab-active: #1d2433;
+    --link: #2563eb;
+    --up: #16a34a;
+    --down: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+                 'Pretendard', 'Noto Sans KR', 'Helvetica Neue', sans-serif;
+    max-width: 760px; margin: 0 auto; padding: 40px 1rem 1.2rem;
+    background: var(--bg); color: var(--text);
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;  /* 가로 스크롤 방지 (잘못된 요소 폭 보호) */
+  }
+  /* ── Header ── */
+  .header-row {
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 0.6rem;
+    margin-bottom: 0.4rem;
+  }
+  h1 { margin: 0; font-size: 1.575rem; font-weight: 700; letter-spacing: -0.01em; }
+  .workflow-link {
+    color: #589EFF; text-decoration: none;
+    font-size: 0.945rem; font-weight: 500;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .workflow-link:hover { opacity: 0.8; }
+  .workflow-link .chevron {
+    display: inline-block; margin-left: 0.35rem;
+    vertical-align: middle; margin-bottom: 2px;
+  }
+  .meta {
+    color: var(--muted); font-size: 0.945rem;
+    margin: 0 0 1.5rem; padding: 0 0 0 1.1rem;
+  }
+  .meta li { margin: 0.1rem 0; }
+  .meta-link { color: var(--link); text-decoration: none; font-weight: 500; }
+  .meta-link:hover { text-decoration: underline; }
+  /* ── Filter bar (year + month tabs) ── */
+  .filter-bar {
+    display: flex; align-items: center; gap: 4px;
+    margin-bottom: 1rem;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  /* 공통: dropdown과 월 탭이 같은 높이 + 같은 padding */
+  .year-selector,
+  .month-tab {
+    padding: 0.65rem 1.1rem;
+    font-size: 1.005rem; font-weight: 500;
+    border-radius: 999px;
+    font-family: inherit; cursor: pointer;
+    line-height: 1.3; white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .year-selector {
+    background: white; border: 1px solid var(--border);
+    color: var(--text); flex-shrink: 0;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M0.75 0.75L4.75 4.75L8.75 0.75' stroke='%231d2433' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 0.9rem center;
+    padding-right: 2rem;
+  }
+  .month-tab {
+    background: white; border: 1px solid var(--border);
+    color: var(--text);
+    flex-shrink: 0;  /* 가로 스크롤 시 탭 너비 유지 */
+  }
+  .month-tab:hover { background: #f8f9fa; }
+  .month-tab.active {
+    background: var(--tab-active); color: white; font-weight: 600;
+    border-color: var(--tab-active);
+  }
+  /* ── Month card ── */
+  .month-card {
+    background: var(--card); border-radius: 16px;
+    padding: 1.3rem 1.2rem; margin-bottom: 1.2rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .month-card[hidden] { display: none; }
+  .month-title { font-size: 1.525rem; font-weight: 700; margin: 0 0 0.25rem; }
+  .month-subtitle { font-size: 0.945rem; color: var(--muted); margin: 0 0 1rem; }
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .stats-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .stat-cell {
+    background: var(--pill-bg); border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.4rem; font-size: 0.945rem; color: var(--muted);
+  }
+  .stat-cell strong { color: var(--text); font-weight: 700; font-size: 1.025rem; }
+  .stat-cell strong.up { color: var(--up); }
+  .stat-cell strong.down { color: var(--down); }
+  .chart {
+    width: 100%; height: 340px; min-height: 300px;
+    margin-top: 0.5rem; overflow: hidden;
+  }
+  .chart .main-svg { background: transparent !important; }
+  .chart-legend {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 0.4rem 0.6rem; margin-top: 0.5rem;
+    font-size: 0.825rem; color: var(--muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.35rem; }
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+  }
+  @media (max-width: 480px) {
+    .chart-legend {
+      grid-template-columns: repeat(2, 1fr) !important;
+      font-size: 0.805rem; gap: 0.35rem 0.4rem;
+    }
+  }
+  /* ── Table headings ── */
+  h3.section-title {
+    margin: 1.8rem 0 0.25rem; font-size: 1.175rem; font-weight: 700;
+  }
+  h3.section-title .count { color: var(--muted); font-size: 0.975rem; font-weight: 500; }
+  .section-desc { font-size: 0.905rem; color: var(--muted); margin: 0 0 0.7rem; }
+  /* ── Tables ── */
+  table {
+    width: 100%; border-collapse: collapse;
+    margin-top: 0.5rem; font-size: 0.975rem;
+    background: var(--card); border-radius: 0; overflow: hidden;
+    table-layout: fixed;
+  }
+  table col.col-date { width: 68px; }
+  table col.col-stock { width: auto; }
+  table col.col-ret { width: 100px; }
+  table col.col-range { width: 70px; }
+  table col.sector-name { width: auto; }
+  table col.sector-count { width: 80px; }
+  table col.sector-ret { width: 100px; }
+  th, td {
+    padding: 16px 14px; border-bottom: 1px solid var(--border);
+    text-align: left; vertical-align: middle;
+    position: relative;
+  }
+  /* 마지막 행은 하단 라인 제거 */
+  tbody tr:last-child td { border-bottom: none; }
+  th {
+    background: var(--bg);  /* 페이지 배경색과 동일 (#f6f7f9) */
+    font-weight: 500; font-size: 0.905rem;
+    color: var(--muted); border-bottom: 1px solid var(--separator);
+    padding-top: 14px; padding-bottom: 14px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  /* 세로 구분선 — 헤더 영역에만 (셀 중앙에 짧은 세로 라인) */
+  th:not(:last-child)::after {
+    content: ''; position: absolute; right: 0;
+    top: 28%; bottom: 28%; width: 1px;
+    background: var(--separator);
+  }
+  th.align-right, td.align-right { text-align: right; }
+  th.align-center, td.align-center { text-align: center; }
+  /* 섹터별 성과 표 — 본문 셀 좌우(width) padding 2배 */
+  .sector-table tbody td { padding: 16px 28px; }
+  /* 섹터명 앞 Lucide 아이콘 (섹터 컬러로 stroke) */
+  .sector-icon {
+    display: inline-block; width: 18px; height: 18px;
+    margin-right: 10px; vertical-align: middle;
+    stroke-width: 2;
+  }
+  td a { color: var(--link); text-decoration: none; }
+  td a:not(.stock-link) { border-bottom: 1px dashed #b9d6e8; }
+  td a:hover { color: #1d4ed8; }
+  td.mfe-mae { font-size: 0.905rem; white-space: nowrap; line-height: 1.35; text-align: right; }
+  td.mfe-mae .row { display: block; }
+  td.stock-col { padding: 16px 14px; }
+  td.amount-col { font-weight: 600; text-align: center; }
+  /* Stock cell: logo + (sector tag / stock name) */
+  .stock-link { display: block; text-decoration: none; color: inherit; }
+  .stock-row { display: flex; align-items: center; gap: 10px; }
+  .stock-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .stock-info .stock-name {
+    color: var(--text); font-weight: 500; font-size: 1.005rem;
+    border-bottom: 1px dashed transparent;
+  }
+  .stock-link:hover .stock-name { color: var(--link); }
+  .sector-tag {
+    display: inline-block; font-size: 0.745rem;
+    padding: 1px 7px; border-radius: 6px;
+    line-height: 1.4; font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .stock-logo, .stock-logo-fb {
+    display: inline-block; width: 32px; height: 32px;
+    vertical-align: middle; border-radius: 50%; overflow: hidden;
+    flex-shrink: 0;
+  }
+  .stock-logo { background: white; border: 1px solid var(--border); }
+  .stock-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .stock-logo-fb {
+    color: white; font-size: 12px; font-weight: 700;
+    text-align: center; line-height: 32px;
+  }
+  /* Show more */
+  .show-more-wrap { text-align: center; margin-top: 0.8rem; }
+  .show-more-btn {
+    background: white; border: 1px solid var(--border); color: var(--text);
+    padding: 0.55rem 1.4rem; border-radius: 10px; cursor: pointer;
+    font-size: 0.975rem; font-family: inherit;
+  }
+  .show-more-btn:hover { background: #f0f3f5; }
+  /* Empty */
+  .empty {
+    color: var(--muted); padding: 2.5rem 1rem; text-align: center;
+    font-size: 1.005rem; line-height: 1.6;
+  }
+  /* Up/Down colors */
+  .up { color: var(--up); font-weight: 600; }
+  .down { color: var(--down); font-weight: 600; }
+  /* 테이블은 좌우 끝까지 꽉 차게 (body padding을 음수 margin으로 상쇄) */
+  .table-wrap {
+    overflow-x: auto;
+    margin-left: -1rem; margin-right: -1rem;
+  }
+  /* 첫/마지막 셀에 body padding만큼 보정 (내용이 화면 가장자리에 안 닿게) */
+  .table-wrap th:first-child, .table-wrap td:first-child { padding-left: 1rem; }
+  .table-wrap th:last-child, .table-wrap td:last-child { padding-right: 1rem; }
+  /* Responsive */
+  @media (max-width: 480px) {
+    body { padding: 0.9rem 0.7rem; }
+    h1 { font-size: 1.275rem; }
+    .workflow-link { font-size: 0.825rem; }
+    .meta { font-size: 0.905rem; }
+    /* 모바일도 body padding(0.7rem)에 맞춰 음수 margin 조정 */
+    .table-wrap { margin-left: -0.7rem; margin-right: -0.7rem; }
+    .table-wrap th:first-child, .table-wrap td:first-child { padding-left: 0.7rem; }
+    .table-wrap th:last-child, .table-wrap td:last-child { padding-right: 0.7rem; }
+    .month-card { padding: 1.1rem 0.9rem; }
+    .month-title { font-size: 1.375rem; }
+    .chart { height: 280px; }
+    .stats-grid { gap: 0.4rem; }
+    .stat-cell {
+      padding: 0.5rem 0.55rem; font-size: 0.825rem;
+      flex-direction: column; align-items: flex-start; gap: 0.15rem;
+    }
+    .stat-cell strong { font-size: 1.045rem; }
+    /* 표: 4컬럼 모바일 — 세로 구분선은 헤더에만 + 충분한 padding */
+    table { font-size: 0.885rem; table-layout: fixed !important; }
+    /* 종목 표(4컬럼) 전용 너비 — :not(.sector-table)로 섹터 표 제외 */
+    table:not(.sector-table) th:nth-child(1),
+    table:not(.sector-table) td:nth-child(1) { width: 60px !important; }
+    table:not(.sector-table) th:nth-child(3),
+    table:not(.sector-table) td:nth-child(3) { width: 95px !important; }
+    table:not(.sector-table) th:nth-child(4),
+    table:not(.sector-table) td:nth-child(4) { width: 70px !important; }
+    /* 섹터 표(3컬럼) 전용 — 섹터명 column이 넓게 차지하도록 */
+    .sector-table th:nth-child(1),
+    .sector-table td:nth-child(1) { width: auto !important; }
+    .sector-table th:nth-child(2),
+    .sector-table td:nth-child(2) { width: 70px !important; }
+    .sector-table th:nth-child(3),
+    .sector-table td:nth-child(3) { width: 100px !important; }
+    th, td { padding: 14px 8px; overflow: hidden; }
+    .stock-info { overflow: hidden; }
+    .stock-info .stock-name {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    th { font-size: 0.805rem; padding: 12px 8px; }
+    td.stock-col { padding: 14px 8px; }
+    /* 섹터 표 모바일 — 좌우 padding 2x 유지 */
+    .sector-table tbody td { padding: 14px 16px; }
+    .stock-logo, .stock-logo-fb { width: 26px; height: 26px; }
+    .stock-logo-fb { line-height: 26px; font-size: 10px; }
+    .stock-row { gap: 6px; }
+    .stock-info { gap: 2px; }
+    .stock-info .stock-name { font-size: 0.925rem; }
+    .sector-tag { font-size: 0.705rem; padding: 1px 5px; }
+    td.mfe-mae { font-size: 0.845rem; }
+    td.amount-col { font-size: 0.945rem; }
+    /* 추천일 column nowrap + 작게 */
+    td:first-child, th:first-child { white-space: nowrap; font-size: 0.825rem; }
+  }
+</style>
+</head>
+<body>
+  <div class="header-row">
+    <h1>주식 AI 백테스트 리포트</h1>
+    <a href="./workflow.html" class="workflow-link">워크플로우 보기 <svg class="chevron" width="4" height="7" viewBox="0 0 4 7" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.5 0.5L3.5 3.5L0.5 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  </div>
+  <ul class="meta">
+    <li>최종 업데이트 : 2026-05-26 22:07 KST</li>
+    <li>평가 기준 : 추천일 +14일 시점 수익률 (8개 티어)</li>
+    <li><a href="./demo.html" class="meta-link">🎨 디자인 미리보기 (가짜 데이터) →</a></li>
+  </ul>
+
+<div class="filter-bar"><select class="year-selector" onchange="selectYear(this)"><option value="2026" selected>2026년</option></select><button class="month-tab active" data-month="05" data-year="2026" onclick="selectMonth(this)">5월</button></div>
+<div class="month-card" data-month="2026-05"><div class="month-title">2026. 05</div><div class="month-subtitle">진행 총 4개 / 만기 0개</div><div class="empty">아직 만기 도달 종목 없음<br>(추천일로부터 14일 경과 시 평가)</div></div>
+<h3 class="section-title">이번 주 추천 종목 성과 <span class="count">(총 4개)</span></h3><p class="section-desc">수익률 높은 순 · 종목명을 누르면 네이버 증권에서 열립니다.<br><span class='up'>▲</span> 최고상승 (MFE) / <span class='down'>▼</span> 최대하락 (MAE)</p><div class="table-wrap"><table><colgroup><col class="col-date"><col class="col-stock"><col class="col-ret"><col class="col-range"></colgroup><thead><tr><th>추천일</th><th>종목</th><th>현재 수익률</th><th>변동폭</th></tr></thead><tbody><tr><td>26.05.24</td><td class="stock-col"><a href="https://m.stock.naver.com/domestic/stock/011230/total" target="_blank" rel="noopener" class="stock-link"><div class="stock-row"><span class="stock-logo"><img src="https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock011230.png" alt="" onerror="logoFail(this)" data-bg="#9b59b6" data-letter="삼"></span><div class="stock-info"><div><span class="sector-tag" style="color:#ec7063;background:rgba(236,112,99,0.13)">전자</span></div><span class="stock-name">삼화전자</span></div></div></a></td><td class="amount-col up">▲29.85%</td><td class="mfe-mae"><span class="row up">▲29.9%</span><span class="row down">▼0.0%</span></td></tr><tr><td>26.05.24</td><td class="stock-col"><a href="https://m.stock.naver.com/domestic/stock/009420/total" target="_blank" rel="noopener" class="stock-link"><div class="stock-row"><span class="stock-logo"><img src="https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock009420.png" alt="" onerror="logoFail(this)" data-bg="#e67e22" data-letter="한"></span><div class="stock-info"><div><span class="sector-tag" style="color:#e74c3c;background:rgba(231,76,60,0.13)">제약 바이오</span></div><span class="stock-name">한올바이오파마</span></div></div></a></td><td class="amount-col up">▲3.68%</td><td class="mfe-mae"><span class="row up">▲3.7%</span><span class="row down">▼0.0%</span></td></tr><tr><td>26.05.24</td><td class="stock-col"><a href="https://m.stock.naver.com/domestic/stock/250000/total" target="_blank" rel="noopener" class="stock-link"><div class="stock-row"><span class="stock-logo"><img src="https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock250000.png" alt="" onerror="logoFail(this)" data-bg="#9b59b6" data-letter="보"></span><div class="stock-info"><div><span class="sector-tag" style="color:#9b59b6;background:rgba(155,89,182,0.13)">IT</span></div><span class="stock-name">보라티알</span></div></div></a></td><td class="amount-col up">▲1.28%</td><td class="mfe-mae"><span class="row up">▲1.3%</span><span class="row down">▼0.0%</span></td></tr><tr><td>26.05.24</td><td class="stock-col"><a href="https://m.stock.naver.com/domestic/stock/148780/total" target="_blank" rel="noopener" class="stock-link"><div class="stock-row"><span class="stock-logo"><img src="https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock148780.png" alt="" onerror="logoFail(this)" data-bg="#e74c3c" data-letter="비"></span><div class="stock-info"><div><span class="sector-tag" style="color:#8e44ad;background:rgba(142,68,173,0.13)">AI</span></div><span class="stock-name">비큐AI</span></div></div></a></td><td class="amount-col down">▼1.76%</td><td class="mfe-mae"><span class="row up">▲0.0%</span><span class="row down">▼1.8%</span></td></tr></tbody></table></div>
+<h3 class="section-title">섹터별 성과 <span class="count">(최근 30일)</span></h3><div class="table-wrap"><table class="sector-table"><colgroup><col class="sector-name"><col class="sector-count"><col class="sector-ret"></colgroup><thead><tr><th>섹터</th><th>종목 수</th><th>평균 수익률</th></tr></thead><tbody><tr><td><i data-lucide="cpu" class="sector-icon" style="color:#ec7063"></i>전자</td><td class="align-center">1</td><td class="align-right up">▲29.85%</td></tr><tr><td><i data-lucide="dna" class="sector-icon" style="color:#e74c3c"></i>제약 바이오</td><td class="align-center">1</td><td class="align-right up">▲3.68%</td></tr><tr><td><i data-lucide="monitor" class="sector-icon" style="color:#9b59b6"></i>IT</td><td class="align-center">1</td><td class="align-right up">▲1.28%</td></tr><tr><td><i data-lucide="brain-circuit" class="sector-icon" style="color:#8e44ad"></i>AI</td><td class="align-center">1</td><td class="align-right down">▼1.76%</td></tr></tbody></table></div>
+
+<script>
+function logoFail(img) {
+  var span = document.createElement('span');
+  span.className = 'stock-logo-fb';
+  span.style.background = img.dataset.bg;
+  span.textContent = img.dataset.letter;
+  img.parentElement.replaceChild(span, img);
+}
+function resizePlotlyIn(card) {
+  // 카드가 보이게 된 후 그 안의 차트를 다시 사이즈 계산
+  if (!card || !window.Plotly) return;
+  var chart = card.querySelector('.chart');
+  if (chart) {
+    // 다음 paint 후에 resize (display: block 적용 대기)
+    requestAnimationFrame(function() {
+      try { Plotly.Plots.resize(chart); } catch(e) {}
+    });
+  }
+}
+function selectMonth(btn) {
+  var month = btn.dataset.month;
+  var year = btn.dataset.year;
+  document.querySelectorAll('.month-tab').forEach(function(b) {
+    b.classList.toggle('active', b === btn);
+  });
+  document.querySelectorAll('.month-card').forEach(function(card) {
+    var match = (!month || card.dataset.month === year + '-' + month);
+    card.hidden = !match;
+    if (match) resizePlotlyIn(card);
+  });
+}
+function selectYear(sel) {
+  var year = sel.value;
+  document.querySelectorAll('.month-tab').forEach(function(b) {
+    b.dataset.year = year;
+    b.classList.remove('active');
+  });
+  document.querySelectorAll('.month-card').forEach(function(card) {
+    card.hidden = !card.dataset.month.startsWith(year + '-');
+  });
+  var firstTab = document.querySelector('.month-tab');
+  if (firstTab) {
+    firstTab.classList.add('active');
+    selectMonth(firstTab);
+  }
+}
+function showMore(btn, step) {
+  var wrap = btn.parentElement;
+  var tbody = wrap.previousElementSibling.querySelector('tbody');
+  var hidden = tbody.querySelectorAll('tr[data-hidden="1"]');
+  var shown = 0;
+  for (var i = 0; i < hidden.length && shown < step; i++) {
+    hidden[i].style.display = '';
+    hidden[i].removeAttribute('data-hidden');
+    shown++;
+  }
+  var remaining = parseInt(btn.dataset.remaining) - shown;
+  if (remaining <= 0) {
+    wrap.style.display = 'none';
+  } else {
+    btn.dataset.remaining = remaining;
+    btn.textContent = '더보기 (' + remaining + '개 남음)';
+  }
+}
+
+// Lucide 아이콘 렌더링 (모든 <i data-lucide="x"> → <svg>)
+if (window.lucide) { lucide.createIcons(); }
+</script>
+</body>
+</html>
