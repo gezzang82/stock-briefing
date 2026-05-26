@@ -10,6 +10,6 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
-# public/은 레포에 커밋 (GitHub Pages가 main:/public 직접 서빙)
+# docs/는 레포에 커밋 (GitHub Pages가 main:/docs 직접 서빙)
 # 이렇게 하면 actions/configure-pages 등 외부 액션 의존 없이 대시보드 자동 갱신.
 

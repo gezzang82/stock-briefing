@@ -1,6 +1,6 @@
 """
 주간 백테스트 리포트
-- 월별 티어 분포 + 종목/섹터 성과를 HTML로 생성 (public/index.html)
+- 월별 티어 분포 + 종목/섹터 성과를 HTML로 생성 (docs/index.html)
 - GitHub Pages에 자동 배포되어 모바일에서 URL로 접근
 - 카카오톡 나에게 보내기로 요약 + 대시보드 링크 전송
 """
@@ -18,7 +18,9 @@ from kakao_sender import send_message as kakao_send
 
 logger = logging.getLogger(__name__)
 
-PUBLIC_DIR = BASE_DIR / "public"
+# GitHub Pages는 main:/docs 폴더를 직접 서빙 (Settings → Pages → Branch 모드).
+# "public"이 아닌 "docs"인 이유: GitHub Pages가 root와 /docs만 폴더 옵션으로 제공.
+PUBLIC_DIR = BASE_DIR / "docs"
 HTML_OUTPUT = PUBLIC_DIR / "index.html"
 
 COLOR_BLUE = 0x3498DB

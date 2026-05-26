@@ -1,6 +1,6 @@
 """
 주식 AI 브리핑 시스템 워크플로우 시각화 페이지 생성.
-public/workflow.html로 출력 → GitHub Pages에 자동 배포.
+docs/workflow.html로 출력 → GitHub Pages에 자동 배포.
 메인 대시보드의 링크로 접근.
 """
 import logging
@@ -480,7 +480,7 @@ flowchart TD
 
 
 def generate_workflow_page(output_path: str | Path):
-    """워크플로우 시각화 HTML 페이지 생성 → public/workflow.html"""
+    """워크플로우 시각화 HTML 페이지 생성 → docs/workflow.html"""
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
@@ -491,5 +491,5 @@ def generate_workflow_page(output_path: str | Path):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    generate_workflow_page("public/workflow.html")
-    print("Open: public/workflow.html")
+    generate_workflow_page("docs/workflow.html")
+    print("Open: docs/workflow.html")

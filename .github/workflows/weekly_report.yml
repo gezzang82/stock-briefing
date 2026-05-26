@@ -58,13 +58,13 @@ jobs:
           [ -n "$NEW_ACCESS" ] && printf '%s' "$NEW_ACCESS" | gh secret set KAKAO_ACCESS_TOKEN --repo ${{ github.repository }}
           [ -n "$NEW_REFRESH" ] && printf '%s' "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo ${{ github.repository }}
 
-      - name: DB + 대시보드 자동 커밋
+      - name: DB + 대시보드(docs/) 자동 커밋
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain stock_briefing.db public/)" ]; then
-            git add stock_briefing.db public/ 2>/dev/null || git add stock_briefing.db
+          if [ -n "$(git status --porcelain stock_briefing.db docs/)" ]; then
+            git add stock_briefing.db docs/ 2>/dev/null || git add stock_briefing.db
             git commit -m "chore: 주간 리포트 + 대시보드 갱신 ($(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST'))"
             git pull --rebase origin ${{ github.ref_name }} || true
             git push origin HEAD:${{ github.ref_name }}
@@ -72,7 +72,7 @@ jobs:
             echo "변경 없음 — 커밋 생략"
           fi
 
-      # GitHub Pages는 Settings → Pages → Source = "Deploy from a branch", Branch = main /public.
+      # GitHub Pages 설정: Settings → Pages → Source = "Deploy from a branch", Branch = main /docs.
 
       - name: 실행 결과 요약
         if: always()
