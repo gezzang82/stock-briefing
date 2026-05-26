@@ -559,13 +559,25 @@ def run_daily_briefing():
             regime_label = REGIME_LABEL.get(regime_info["regime"], ("", ""))[0]
 
         if qualified:
-            top_names = " · ".join(r["name"] for r in qualified[:3])
+            # TOP 3 종목 + 핵심 모멘텀(key_catalyst) 한 줄씩
+            # 카카오 메시지 글자수 부풀기 방지: catalyst 60자 초과 시 잘라서 표시
+            top_lines = []
+            for i, r in enumerate(qualified[:3], 1):
+                catalyst = (r.get("key_catalyst") or "").strip()
+                if catalyst:
+                    if len(catalyst) > 60:
+                        catalyst = catalyst[:57] + "…"
+                    top_lines.append(f"{i}. {r['name']} — {catalyst}")
+                else:
+                    top_lines.append(f"{i}. {r['name']}")
+            top_block = "\n".join(top_lines)
+
             kakao_msg = (
                 f"📈 주식 AI 브리핑 [{today}]\n"
                 f"{kospi_str}\n{kosdaq_str}\n"
                 f"{regime_label}\n\n"
                 f"📊 추천 {len(qualified)}개\n"
-                f"TOP: {top_names}\n\n"
+                f"{top_block}\n\n"
                 f"📱 대시보드: {DASHBOARD_URL}"
             )
         else:
