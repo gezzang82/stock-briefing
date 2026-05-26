@@ -29,9 +29,7 @@ permissions:
 jobs:
   briefing:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # GitHub Pages environment 일시 제거 (codeload 장애 대비). 복구 후 다시 추가.
 
     steps:
       - name: 코드 체크아웃
@@ -108,20 +106,10 @@ jobs:
             echo "DB 변경 없음 — 커밋 생략"
           fi
 
-      # GitHub codeload 장애로 configure-pages 다운 불가 → 일시 제거 (Pages는 이미 활성화돼있어 무방)
-      # 복구 후 다시 추가하면 됨.
-      - name: Pages 아티팩트 업로드
-        if: hashFiles('public/index.html') != ''
-        continue-on-error: true
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./public
-
-      - name: GitHub Pages 배포
-        if: hashFiles('public/index.html') != ''
-        continue-on-error: true
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # ⚠️ GitHub codeload 전반 장애로 Pages 관련 액션 모두 일시 제거.
+      # public/index.html은 브리핑 실행에서 생성되어 main에 자동 커밋되므로
+      # GitHub Pages가 main의 public/을 직접 서빙하도록 설정돼있으면 자동 반영됨.
+      # codeload 복구 후 actions/configure-pages, upload-pages-artifact, deploy-pages 다시 추가.
 
       - name: 실행 결과 요약
         if: always()
