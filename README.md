@@ -22,13 +22,15 @@
 ### 메인 실행
 
 - **트리거**: [cron-job.org](https://cron-job.org/) → GitHub `workflow_dispatch` 호출
-- **시각**: 매 평일 (월~금) **06:30 KST**
-- **이유**: GitHub Actions 기본 `schedule`은 ~14시간 지연/누락이 빈번해 외부 cron 사용
+- **시각**: 매 평일 (월~금) **09:05 KST** (장 개장 후 5분)
+- **이유 1**: GitHub Actions 기본 `schedule`은 ~14시간 지연/누락이 빈번해 외부 cron 사용
+- **이유 2**: KIS API는 장 운영 시간(09:00~15:30 KST)에 정상 응답.
+  그 외 시간엔 매매중단/거래정지 등 비정상 status code 반환
 
 ### 백업 실행
 
-- **트리거**: GitHub Actions `schedule` (cron `30 22 * * 0-4` = UTC 22:30)
-- **시각**: 매 평일 **07:30 KST**
+- **트리거**: GitHub Actions `schedule` (cron `5 1 * * 1-5` = UTC 01:05)
+- **시각**: 매 평일 **10:05 KST**
 - **의미**: cron-job.org 자체 장애 시 fallback
 
 ### 중복 실행 방지

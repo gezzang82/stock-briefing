@@ -3,9 +3,16 @@
 GitHub Actions 기본 `schedule`이 ~14시간씩 지연/누락되는 문제를 회피하기 위해
 [cron-job.org](https://cron-job.org/)를 메인 트리거로 사용한다.
 
-평일 06:30 KST에 cron-job.org가 GitHub API를 호출 → `workflow_dispatch` 이벤트 발생 → `briefing.yml` 즉시 실행.
+평일 **09:05 KST** (장 개장 후 5분)에 cron-job.org가 GitHub API를 호출 → `workflow_dispatch` 이벤트 발생 → `briefing.yml` 즉시 실행.
 
-GitHub Actions `schedule`은 백업으로 KST 07:30에만 유지 (멱등성 가드가 중복 차단).
+GitHub Actions `schedule`은 백업으로 KST 10:05에만 유지 (멱등성 가드가 중복 차단).
+
+### 왜 09:05인가? (06:30이 아니라)
+
+KIS Open API의 `inquire-price`는 의도된 사용 시점이 **장 운영 시간(09:00~15:30 KST)** 이라,
+그 외 시간에 호출하면 우량주에도 매매중단/거래정지 status code(54, 55, 57)를 비정상 반환함.
+
+→ 장 개장(09:00) 후 5분 = 시가 형성 + 첫 거래량 반영 + 모멘텀 시그널 가장 강한 시간대.
 
 ---
 
@@ -40,7 +47,7 @@ GitHub Actions `schedule`은 백업으로 KST 07:30에만 유지 (멱등성 가�
 
 | 필드 | 값 |
 |---|---|
-| Title | `Stock Briefing Daily 06:30 KST` |
+| Title | `Stock Briefing Daily 09:05 KST` |
 | Address (URL) | `https://api.github.com/repos/gezzang82/stock-briefing/actions/workflows/briefing.yml/dispatches` |
 | Enabled | ✅ |
 
@@ -52,10 +59,10 @@ GitHub Actions `schedule`은 백업으로 KST 07:30에만 유지 (멱등성 가�
 | Days of month | every |
 | Months | every |
 | Days of week | Mon, Tue, Wed, Thu, Fri (월~금만 체크) |
-| Hours | `6` |
-| Minutes | `30` |
+| Hours | `9` |
+| Minutes | `5` |
 
-cron 표현식으로 입력 가능하면: `30 6 * * 1-5` (Asia/Seoul 기준)
+cron 표현식으로 입력 가능하면: `5 9 * * 1-5` (Asia/Seoul 기준)
 
 #### Advanced 탭
 
@@ -102,15 +109,15 @@ cron 표현식으로 입력 가능하면: `30 6 * * 1-5` (Asia/Seoul 기준)
 
 ### 3-3. 실제 정시 동작 확인
 
-- 다음 평일 06:30 KST에 cron-job.org에서 실행 기록 생성
+- 다음 평일 09:05 KST에 cron-job.org에서 실행 기록 생성
 - GitHub Actions에서 같은 시각에 workflow run 시작
-- 카카오톡 도착 시각 확인 (보통 06:30~06:35 KST 사이)
+- 카카오톡 도착 시각 확인 (보통 09:05~09:10 KST 사이)
 
 ---
 
 ## 4. 중복 실행 방지 — 멱등성 가드
 
-같은 날 cron-job.org(06:30)와 GitHub 백업 schedule(07:30) 둘 다 트리거되어도
+같은 날 cron-job.org(09:05)와 GitHub 백업 schedule(10:05) 둘 다 트리거되어도
 실제 브리핑은 1회만 실행됨.
 
 ### 가드 흐름
@@ -137,7 +144,7 @@ snapshot_logs 테이블에 같은 날짜 row 있나?
 ## 5. 실제 운영 흐름
 
 ```
-06:30 KST  cron-job.org → POST GitHub API → workflow_dispatch
+09:05 KST  cron-job.org → POST GitHub API → workflow_dispatch
                                           ↓
                                 briefing.yml 즉시 실행
                                           ↓
@@ -147,7 +154,7 @@ snapshot_logs 테이블에 같은 날짜 row 있나?
                                           ↓
                             snapshot_logs에 오늘 row 추가
 
-07:30 KST  GitHub schedule (백업)
+10:05 KST  GitHub schedule (백업)
                                           ↓
                             has_briefing_run_for_date = True
                                           ↓
@@ -190,7 +197,7 @@ cron-job.org가 실패한 날만 백업이 의미를 가짐.
 - cron-job.org 응답 본문이 빈 문자열이고 코드가 `204` 이면 정상이지만 화면 새로고침 필요
 - 다른 코드(예: 422)면 `ref` body 형식 확인 → `{"ref":"main"}`
 
-### 카톡이 06:30이 아니라 06:31~06:33에 옴
+### 카톡이 09:05가 아니라 09:06~09:08에 옴
 
 - 정상. cron-job.org 트리거 → GitHub API → 워크플로우 큐잉 → KIS API 호출 등 누적 지연 1~3분.
 - 1분 이내 정확도 필요하면 다른 cron 서비스(Cloudflare Workers Cron 등) 검토.
