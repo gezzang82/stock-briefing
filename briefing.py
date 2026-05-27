@@ -2,6 +2,7 @@
 주식 브리핑 메인 오케스트레이터
 """
 import logging
+import os
 import sys
 from datetime import date, datetime
 
@@ -341,8 +342,25 @@ def _one_recommendation_pass(
     return analysis, cleaned, price_map, rejected
 
 
+def _log_trigger_source():
+    """
+    GitHub Actions 환경에서 어떤 이벤트로 호출됐는지 명시 로깅.
+    - workflow_dispatch: cron-job.org (메인) 또는 수동 트리거
+    - schedule: GitHub Actions 백업 cron (KST 07:30)
+    """
+    event = os.environ.get("GITHUB_EVENT_NAME")
+    if not event:
+        return
+    label = {
+        "workflow_dispatch": "🚀 Trigger source: workflow_dispatch (cron-job.org 또는 수동)",
+        "schedule": "🚀 Trigger source: schedule (GitHub Actions 백업 cron)",
+    }.get(event, f"🚀 Trigger source: {event}")
+    logger.info(label)
+
+
 def run_daily_briefing():
     """메인 브리핑 실행"""
+    _log_trigger_source()
     # ───── 날짜는 KST 기준 (UTC 러너에서도 한국 영업일 기준 동작) ─────
     today = datetime.now(KST).date().isoformat()
     logger.info("🕒 KST 기준 오늘 날짜: %s", today)
