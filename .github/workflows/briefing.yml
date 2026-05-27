@@ -2,12 +2,10 @@ name: 주식 브리핑
 
 on:
   schedule:
-    # GitHub Actions schedule은 가끔 지연/누락됨 → 백업 cron으로 보완.
-    # briefing.py의 has_recommendations_for_date() 멱등성 가드가
-    # 같은 날 중복 실행을 자동으로 차단함.
-    - cron: '30 21 * * 0-4'  # 주 실행 — KST 월~금 06:30
-    - cron: '15 22 * * 0-4'  # 백업1 — KST 월~금 07:15
-    - cron: '0 23 * * 0-4'   # 백업2 — KST 월~금 08:00
+    # 메인 트리거는 외부 cron-job.org가 workflow_dispatch로 호출 (KST 06:30).
+    # 여기는 백업 1개만 — GitHub Actions schedule 자체가 지연/누락되더라도
+    # cron-job.org가 안 떴을 때 fallback. 멱등성 가드가 중복 차단.
+    - cron: '30 22 * * 0-4'  # 백업 — KST 월~금 07:30
   workflow_dispatch:
     inputs:
       force:
