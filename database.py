@@ -323,11 +323,12 @@ def get_latest_signal_performance() -> dict:
 
 def has_recommendations_for_date(target_date: str) -> bool:
     """
-    해당 날짜에 추천 데이터가 이미 존재하는지 확인 (멱등성 가드용).
-    같은 날 백업 cron이 여러 번 실행되어도 1회만 실제 진행되도록 사용.
+    해당 날짜에 추천 데이터가 존재하는지 확인.
 
-    Graceful fallback: 테이블 없음 / 컬럼 변경 / 그 외 어떤 에러에도
-    False를 반환해서 호출자가 자연스럽게 정상 실행 흐름으로 진입하게 함.
+    ⚠️ DEPRECATED for idempotency guard — qualified=0인 날엔 row가
+    안 들어가 가드를 우회시킴. 멱등성 가드는 has_briefing_run_for_date() 사용.
+
+    그 외 일반 조회 용도로는 계속 사용 가능.
     """
     try:
         with get_conn() as conn:
@@ -337,8 +338,31 @@ def has_recommendations_for_date(target_date: str) -> bool:
             ).fetchone()
         return row is not None
     except Exception as e:
-        # 테이블 미존재(첫 실행) / 스키마 변경 / 기타 — 모두 안전하게 False
         logger.debug("has_recommendations_for_date 체크 실패 (무시): %s", e)
+        return False
+
+
+def has_briefing_run_for_date(target_date: str) -> bool:
+    """
+    해당 날짜에 브리핑이 이미 실행되었는지 확인 (멱등성 가드 — 권장).
+
+    snapshot_logs 기준 — 자격 통과 추천이 0개여도 snapshot은 항상 저장되므로
+    "오늘 이미 돌았다"는 사실을 견고하게 판단 가능.
+
+    has_recommendations_for_date()는 recommendations 테이블 기준이라
+    qualified=0인 날에는 row가 안 들어가서 가드 우회 사고 발생 (2026-05-27).
+
+    Graceful fallback: 어떤 에러에도 False 반환.
+    """
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM snapshot_logs WHERE snapshot_date = ? LIMIT 1",
+                (target_date,),
+            ).fetchone()
+        return row is not None
+    except Exception as e:
+        logger.debug("has_briefing_run_for_date 체크 실패 (무시): %s", e)
         return False
 
 

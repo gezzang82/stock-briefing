@@ -8,7 +8,7 @@ from datetime import date, datetime
 from accuracy_tracker import format_accuracy_summary, record_prices_for_active_recs
 from ai_analyzer import analyze_and_recommend
 from database import (
-    get_recent_recommended_stocks, has_recommendations_for_date,
+    get_recent_recommended_stocks, has_briefing_run_for_date,
     init_db, save_recommendations,
 )
 from kis_api import kis
@@ -349,16 +349,16 @@ def run_daily_briefing():
 
     # ───── 멱등성 가드 — 백업 cron 중복 실행 방지 ─────
     # briefing.yml에 백업 cron이 다중 등록되어 있어 같은 날 여러 번 호출될 수 있음.
-    # 이미 오늘 추천이 저장된 경우 정상 종료해서 카톡/대시보드 중복 발송 방지.
+    # snapshot_logs 기준 판단 (자격 0개여도 snapshot은 항상 저장됨 → 견고).
     # `--force` 플래그가 있으면 무시 (수동 재실행/디버깅용).
     is_force = "--force" in sys.argv
     if is_force:
         logger.warning("⚠️ FORCE 실행 — 멱등성 체크 무시")
-    elif has_recommendations_for_date(today):
-        logger.info("⏭️ 오늘 브리핑 이미 존재 — 중복 실행 skip")
+    elif has_briefing_run_for_date(today):
+        logger.info("⏭️ 오늘 브리핑 이미 실행됨 (snapshot 존재) — 중복 실행 skip")
         return
     else:
-        logger.info("오늘 브리핑 데이터 없음 — 정상 진행")
+        logger.info("오늘 브리핑 미실행 — 정상 진행")
 
     logger.info("=== %s 주식 브리핑 시작 ===", today)
 
@@ -580,16 +580,13 @@ def run_daily_briefing():
                 f"{top_block}\n\n"
                 f"📱 대시보드: {DASHBOARD_URL}"
             )
+            ok = kakao_send(kakao_msg)
+            logger.info("카카오톡 전송 %s", "성공" if ok else "실패/건너뜀")
         else:
-            kakao_msg = (
-                f"📭 주식 AI 브리핑 [{today}]\n"
-                f"{kospi_str}\n{kosdaq_str}\n"
-                f"{regime_label}\n\n"
-                f"오늘은 추천 종목 없음 (매매 보류)\n"
-                f"📱 대시보드: {DASHBOARD_URL}"
-            )
-        ok = kakao_send(kakao_msg)
-        logger.info("카카오톡 전송 %s", "성공" if ok else "실패/건너뜀")
+            # 자격 통과 추천 0개 — 카톡 발송 자체를 skip (P1).
+            # 추천이 없는 날에 알림 보내봐야 노이즈만 됨.
+            # 시스템 헬스체크는 워크플로우 success/failure 알림으로 충분.
+            logger.info("📭 자격 통과 추천 0개 — 카톡 발송 skip")
     except Exception as e:
         logger.warning("카카오톡 전송 중 예외: %s", e)
 
