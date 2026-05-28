@@ -581,7 +581,22 @@ def run_daily_briefing():
     analysis["recommendations"] = qualified
 
     # 7. 자격 있는 추천 DB 저장 (0개여도 저장 — rec_date 기록용)
-    save_recommendations(today, qualified, analysis.get("market_summary", ""))
+    # ⚠️ 안전장치 (2026-05-28 사고 대응):
+    #   save_recommendations()는 내부적으로 같은 rec_date의 기존 row를 DELETE 후 INSERT함.
+    #   force=true 디버그 실행에서 결과가 0개로 나오면 기존에 저장된 정상 추천이
+    #   덮어쓰여 사라지는 사고가 있었음.
+    #
+    #   - 정상 실행 (force=false): 기존 로직 유지 — 0개여도 DELETE+INSERT 진행
+    #     (정상 cron에서 0개면 그 날 정말 추천 없음이라는 의도)
+    #   - FORCE + 0개: save_recommendations 스킵하여 기존 row 보존
+    #     (디버그 trigger의 오염을 막음)
+    #   - snapshot은 force와 무관하게 항상 저장 (디버깅 데이터)
+    if is_force and not qualified:
+        logger.warning(
+            "⚠️ FORCE 실행 결과 추천 0개 — 기존 추천 데이터 보존 (save_recommendations skip)"
+        )
+    else:
+        save_recommendations(today, qualified, analysis.get("market_summary", ""))
 
     # 7.5. Snapshot — 추천 당시 전체 컨텍스트를 JSON으로 보존
     try:
