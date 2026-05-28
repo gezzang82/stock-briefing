@@ -63,6 +63,41 @@ def _is_force_on_closed_day() -> bool:
         return False
 
 
+def _log_kis_status_debug(code: str, name: str, pdata: dict,
+                          ok: bool, reason: str) -> None:
+    """
+    KIS get_stock_price() raw 응답의 거래상태 핵심 필드를 WARNING으로 출력.
+
+    목적:
+      - 정상 종목이 매매중단/거래정지로 잘못 판정되는 원인 추적
+      - _check_tradeable() 결과 + KIS 응답 필드 동시 노출
+      - 응답 필드 의미 변경/누락 여부 확인
+
+    Notes:
+      - 민감정보(token 등) 일절 출력 안 함 — 시세/상태 필드만 추출
+      - 실패해도 호출자에게 예외 전파 안 함 (try/except 감쌀 것)
+      - 로그 레벨은 WARNING (운영 환경에서도 노출되도록)
+    """
+    keys = sorted(pdata.keys()) if isinstance(pdata, dict) else []
+    logger.warning(
+        "[DEBUG-KIS-STATUS] code=%s name=%s "
+        "stat=%s temp=%s mang=%s sltr=%s warn=%s "
+        "price=%s change=%s "
+        "_check_tradeable: ok=%s reason=%r "
+        "keys=%s",
+        code, name,
+        pdata.get("iscd_stat_cls_code"),
+        pdata.get("temp_stop_yn"),
+        pdata.get("mang_issu_cls_code"),
+        pdata.get("sltr_yn"),
+        pdata.get("mrkt_warn_cls_code"),
+        pdata.get("current_price"),
+        pdata.get("change_pct"),
+        ok, reason,
+        keys,
+    )
+
+
 def _check_tradeable(pdata: dict) -> tuple[bool, str]:
     """
     KIS inquire-price 응답 필드로 거래 가능 여부 판정.
@@ -155,6 +190,13 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
         # 4) 거래 가능 여부 (관리종목/거래정지/정리매매 등)
         ok, reason = _check_tradeable(pdata)
         if not ok:
+            # ── DEBUG: KIS 응답 raw 필드 노출 (원인 추적용) ──
+            # 정상 종목이 매매중단으로 잘못 판정되는 패턴 분석. 실패해도 무시.
+            try:
+                _log_kis_status_debug(code, kis_name, pdata, ok, reason)
+            except Exception as e:
+                logger.debug("DEBUG-KIS-STATUS 로깅 실패 (무시): %s", e)
+
             if _is_force_on_closed_day():
                 # 휴장일 강제 실행: KIS 상태 코드가 비정상으로 반환되므로
                 # 거래상태 체크는 warning만 남기고 통과시킴
