@@ -1,0 +1,94 @@
+name: 일회성 카톡 발송 (수동 추천 결과)
+# ⚠️ KIS API 검증 이슈로 자동 발송 못 한 5/28 추천 3종목을 카톡으로 발송하는 일회성 워크플로우.
+# 실행 후 이 파일은 삭제 예정.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+
+      - name: 카톡 발송 + DB 갱신 토큰 반영
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_ACCESS_TOKEN: ${{ secrets.KAKAO_ACCESS_TOKEN }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+        run: |
+          python3 << 'PY'
+          import sqlite3
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from kakao_sender import send_message
+          from html_report import DASHBOARD_URL
+
+          KST = ZoneInfo("Asia/Seoul")
+          today = datetime.now(KST).date().isoformat()
+
+          conn = sqlite3.connect('stock_briefing.db')
+          conn.row_factory = sqlite3.Row
+          recs = conn.execute(
+              "SELECT rank, stock_name, key_catalyst FROM recommendations WHERE rec_date = ? ORDER BY rank",
+              (today,),
+          ).fetchall()
+
+          if not recs:
+              print(f"❌ {today} 추천 없음 — 발송 중단")
+              raise SystemExit(1)
+
+          top_lines = []
+          for r in recs[:3]:
+              cat = (r['key_catalyst'] or '').strip()
+              if len(cat) > 60:
+                  cat = cat[:57] + '…'
+              top_lines.append(f"{r['rank']}. {r['stock_name']} — {cat}")
+          top_block = "\n".join(top_lines)
+
+          msg = (
+              f"📈 주식 AI 브리핑 [{today}]\n"
+              f"⚠️ 오전 KIS API 이슈로 늦은 발송\n\n"
+              f"📊 추천 {len(recs)}개\n"
+              f"{top_block}\n\n"
+              f"📱 대시보드: {DASHBOARD_URL}"
+          )
+          print("=" * 50)
+          print(msg)
+          print("=" * 50)
+          print(f"총 {len(msg)}자")
+
+          ok = send_message(msg)
+          if ok:
+              print("✅ 카톡 전송 성공")
+          else:
+              print("❌ 카톡 전송 실패")
+              raise SystemExit(1)
+          PY
+
+      - name: Kakao 토큰 갱신 반영
+        if: success() && hashFiles('/tmp/kakao_tokens_new.json') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_ACCESS=$(python3 -c "import json; print(json.load(open('/tmp/kakao_tokens_new.json'))['access_token'])")
+          NEW_REFRESH=$(python3 -c "import json; d=json.load(open('/tmp/kakao_tokens_new.json')); print(d.get('refresh_token',''))")
+          [ -n "$NEW_ACCESS" ] && printf '%s' "$NEW_ACCESS" | gh secret set KAKAO_ACCESS_TOKEN --repo ${{ github.repository }}
+          [ -n "$NEW_REFRESH" ] && printf '%s' "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo ${{ github.repository }}
