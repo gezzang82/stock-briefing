@@ -164,13 +164,16 @@ HTML = r"""<!DOCTYPE html>
 <!-- 1. 전체 흐름 -->
 <section>
   <h2><span class="num">1</span> 전체 흐름</h2>
-  <p class="desc">매일 06:30 KST 트리거 → 데이터 수집 → AI 추천 → 검증 → 카카오톡 전송</p>
+  <p class="desc">평일 09:05 KST 트리거 (장 개장 후) → 휴장 + 멱등성 체크 → 데이터 수집 → AI 추천 → 검증 → 카카오톡 전송</p>
   <div class="mermaid-wrap">
     <pre class="mermaid">
 flowchart TD
-    A([🕕 GitHub Actions Cron<br/>평일 06:30 KST]) --> B{휴장일 체크}
+    A([🕘 cron-job.org<br/>평일 09:05 KST]) --> B{KST 휴장일?}
+    AB([🕙 GitHub Actions<br/>백업 10:05 KST]) -.cron-job.org 실패시.-> B
     B -->|주말/공휴일| Z([스킵])
-    B -->|영업일| C[📦 DB + KIS 토큰<br/>캐시 복원]
+    B -->|영업일| BI{오늘 이미 실행?<br/>snapshot_logs 확인}
+    BI -->|있음| Z2([⏭️ 멱등성 가드 skip])
+    BI -->|없음| C[📦 KIS 토큰 캐시 복원]
     C --> D[📡 데이터 수집]
     D --> D1[KIS 지수<br/>KOSPI/KOSDAQ]
     D --> D2[Naver 뉴스<br/>가중치 + 감성]
@@ -179,19 +182,23 @@ flowchart TD
     D2 --> E
     D3 --> E
     E --> F[🔬 기술적 스크리닝<br/>외국인 + 기관 + 거래대금]
-    F --> G[🤖 AI 분석<br/>gpt-4o-mini]
+    F --> SP[📊 시그널 성과 캐시<br/>signal_performance]
+    SP --> G[🤖 AI 분석<br/>gpt-4o-mini]
     G --> H{검증 4단계}
     H -->|< 5개| G
     H -->|>= 5개| I[📏 점수 필터<br/>>= 50점만]
-    I --> J[💾 DB 저장<br/>+ Snapshot]
+    I --> J[💾 DB + Snapshot 저장]
     J --> M[🎯 14일 추적<br/>MFE / MAE / Final]
-    J --> K[🌐 HTML 대시보드]
-    J --> L[📱 카카오톡 발송]
+    J --> K[🌐 HTML 대시보드<br/>docs/]
+    J --> L[📱 카카오톡<br/>TOP 3 + 핵심 모멘텀]
     M -.수동 .-> N[📈 historical_backtest.py<br/>승률 / 샤프 / MDD]
 
     style A fill:#2563eb,stroke:#1d4ed8,color:#fff
+    style AB fill:#64748b,stroke:#475569,color:#fff
+    style BI fill:#0ea5e9,stroke:#0284c7,color:#fff
     style E fill:#9b59b6,stroke:#8e44ad,color:#fff
     style F fill:#16a085,stroke:#138d75,color:#fff
+    style SP fill:#0891b2,stroke:#0e7490,color:#fff
     style G fill:#e67e22,stroke:#d35400,color:#fff
     style J fill:#16a34a,stroke:#15803d,color:#fff
     style L fill:#f1c40f,stroke:#f39c12,color:#fff
@@ -204,21 +211,34 @@ flowchart TD
 
 <!-- 2. 스케줄 -->
 <section>
-  <h2><span class="num">2</span> 자동 스케줄</h2>
+  <h2><span class="num">2</span> 자동 스케줄 — 이중 트리거</h2>
   <div class="grid grid-2">
     <div class="card blue">
-      <h3><span class="ic">🌅</span> 일일 브리핑</h3>
-      <p>평일 매일 아침 자동 실행. 시장 데이터 분석 → 추천 종목 카카오톡 전송.</p>
-      <span class="meta">cron: '30 21 * * 0-4' (UTC) = 평일 06:30 KST</span>
+      <h3><span class="ic">🌅</span> 메인 트리거 (cron-job.org)</h3>
+      <p>외부 cron 서비스가 GitHub API로 workflow_dispatch 호출.<br>
+      KIS API는 장 운영시간(09:00~15:30 KST)에 정상 응답하므로, 09:05 = 장 개장 + 5분.</p>
+      <span class="meta">crontab: '5 9 * * 1-5' (Asia/Seoul) = 평일 09:05 KST</span>
     </div>
+    <div class="card orange">
+      <h3><span class="ic">🛡️</span> 백업 트리거 (GitHub Actions)</h3>
+      <p>cron-job.org 자체 장애 대비 fallback. 멱등성 가드가 중복 실행 방지.</p>
+      <span class="meta">cron: '5 1 * * 1-5' (UTC) = 평일 10:05 KST</span>
+    </div>
+  </div>
+  <div class="grid grid-2" style="margin-top: 1rem;">
     <div class="card purple">
       <h3><span class="ic">📅</span> 주간 리포트</h3>
-      <p>매주 일요일 통계 요약. 월별 적중률, 평균 수익률, 승률.</p>
+      <p>매주 일요일 통계 요약 + 시그널 성과 캐시 갱신.</p>
       <span class="meta">cron: '0 0 * * 0' (UTC) = 일요일 09:00 KST</span>
+    </div>
+    <div class="card teal">
+      <h3><span class="ic">🔁</span> 멱등성 가드</h3>
+      <p>같은 날 메인 + 백업 둘 다 떠도 1회만 실행. snapshot_logs 기준 판단 (자격 0개여도 견고).</p>
+      <span class="meta">database.has_briefing_run_for_date(today_kst)</span>
     </div>
   </div>
   <p class="desc" style="margin-top: 1rem;">
-    + <strong>휴장일 자동 스킵</strong>: market_calendar.py가 한국 공휴일 + KRX 연말폐장 감지
+    + <strong>휴장일 자동 스킵</strong>: market_calendar.py가 한국 공휴일 + KRX 연말폐장 감지 (KST 기준)
   </p>
 </section>
 
@@ -337,17 +357,20 @@ flowchart TD
     <div class="check-item">
       <div class="check-num">4</div>
       <div class="check-body">
-        <strong>거래 가능 여부</strong>
-        <p>KIS 상태 코드로 관리종목/거래정지/정리매매/시장경고/임시정지 모두 차단.
-        <span class="tag red">iscd_stat_cls_code 51~59 ❌</span>
+        <strong>거래 가능 여부 (2026-05-28 정정)</strong>
+        <p>실제 거래정지/관리/정리매매만 차단. 54~59는 시간/가격 상태 코드로 확인되어 제외.
+        <span class="tag red">iscd_stat_cls_code 51 (관리) / 52 (거래정지) / 53 (정리매매) ❌</span>
         <span class="tag red">temp_stop_yn = Y ❌</span>
         <span class="tag red">sltr_yn = Y ❌</span>
-        <span class="tag red">mrkt_warn_cls_code 02/03 ❌</span></p>
+        <span class="tag red">mang_issu_cls_code = Y ❌</span>
+        <span class="tag red">mrkt_warn_cls_code 02/03 ❌</span>
+        <span class="tag blue">54~59 (시간외/상한가/단일가 등) ✓ 통과</span></p>
       </div>
     </div>
   </div>
   <p class="desc" style="margin-top: 0.8rem;">
-    검증 통과 < 5개면 AI가 자동으로 다시 호출됨 (탈락 코드를 회피 목록에 추가)
+    검증 통과 < 5개면 AI가 자동으로 다시 호출됨 (탈락 코드를 회피 목록에 추가).
+    탈락 시 KIS raw 응답이 <code>[DEBUG-KIS-STATUS]</code> WARNING으로 로깅되어 추후 패턴 분석 가능.
   </p>
 </section>
 
@@ -420,12 +443,18 @@ flowchart TD
     <div class="channel">
       <div class="ic">📱</div>
       <h3>카카오톡 나에게 보내기</h3>
-      <p>매일 06:30 + 주간 리포트<br>토큰 자동 갱신 (영구 운영)<br>실패 시 알림도 카톡으로</p>
+      <p>평일 09:05 KST + 주간 리포트<br>
+      <strong>TOP 3 + 핵심 모멘텀 한 줄씩</strong><br>
+      토큰 자동 갱신 (영구 운영)<br>
+      추천 0개 시 자동 skip · 실패 시 알림도 카톡으로</p>
     </div>
     <div class="channel web">
       <div class="ic">🌐</div>
       <h3>HTML 대시보드</h3>
-      <p>GitHub Pages 자동 배포<br>월별 도넛 차트 + 종목 표<br>워크플로우 + 디자인 미리보기 페이지</p>
+      <p>GitHub Pages 자동 배포 (main:/docs Branch 모드)<br>
+      월별 도넛 차트 + 종목 표<br>
+      워크플로우 + 디자인 미리보기 페이지<br>
+      외부 액션 의존성 0 (codeload 장애 영향 없음)</p>
     </div>
   </div>
 </section>
