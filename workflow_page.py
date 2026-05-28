@@ -168,8 +168,8 @@ HTML = r"""<!DOCTYPE html>
   <div class="mermaid-wrap">
     <pre class="mermaid">
 flowchart TD
-    A([🕘 cron-job.org<br/>평일 09:05 KST]) --> B{KST 휴장일?}
-    AB([🕙 GitHub Actions<br/>백업 10:05 KST]) -.cron-job.org 실패시.-> B
+    A([🕘 cron-job org<br/>평일 09:05 KST]) --> B{KST 휴장일?}
+    AB([🕙 GitHub Actions<br/>백업 10:05 KST]) -.->|메인 실패시| B
     B -->|주말/공휴일| Z([스킵])
     B -->|영업일| BI{오늘 이미 실행?<br/>snapshot_logs 확인}
     BI -->|있음| Z2([⏭️ 멱등성 가드 skip])
