@@ -15,6 +15,7 @@ from config import BASE_DIR, DB_PATH
 from database import get_conn
 from html_report import DASHBOARD_URL, generate_html_report
 from kakao_sender import send_message as kakao_send
+from market_calendar import today_kst
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ COLOR_RED = 0xE74C3C
 # ============== 데이터 ==============
 
 def fetch_period_items(days: int = 7) -> list[dict]:
-    today = date.today()
+    today = today_kst()
     start = (today - timedelta(days=days)).isoformat()
     with get_conn() as conn:
         rows = conn.execute(
@@ -50,7 +51,7 @@ def fetch_period_items(days: int = 7) -> list[dict]:
 
 
 def fetch_sector_performance(days: int = 30) -> list[dict]:
-    today = date.today()
+    today = today_kst()
     start = (today - timedelta(days=days)).isoformat()
     with get_conn() as conn:
         rows = conn.execute(
@@ -109,7 +110,7 @@ def run_weekly_report():
     if not DB_PATH.exists():
         logger.warning("DB 파일 없음 — 빈 리포트 생성")
 
-    today = date.today()
+    today = today_kst()
     cur_month = today.strftime("%Y-%m")
     prev_ym = _prev_month_str(cur_month)
 

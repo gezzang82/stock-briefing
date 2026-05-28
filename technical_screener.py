@@ -8,11 +8,12 @@ AI 분석에 후보 목록 + 지표를 전달하기 위한 전처리 단계.
 """
 import logging
 import time
-from datetime import date, timedelta
+from datetime import timedelta
 
 import requests
 
 from config import KIS_BASE_URL
+from market_calendar import today_kst
 from kis_api import cache_stock_name, kis
 
 logger = logging.getLogger(__name__)
@@ -93,9 +94,9 @@ def get_volume_ranking(count: int = 50, market: str = "ALL") -> list[dict]:
 def get_daily_ohlcv(code: str, days: int = 60) -> list[dict]:
     """일봉 OHLCV (수정주가). 최신이 리스트 마지막."""
     url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-    end = date.today().strftime("%Y%m%d")
+    end = today_kst().strftime("%Y%m%d")
     # 공휴일/주말 고려해서 days × 1.6 만큼 거슬러 조회
-    start = (date.today() - timedelta(days=int(days * 1.6))).strftime("%Y%m%d")
+    start = (today_kst() - timedelta(days=int(days * 1.6))).strftime("%Y%m%d")
     params = {
         "FID_COND_MRKT_DIV_CODE": "J",
         "FID_INPUT_ISCD": code,

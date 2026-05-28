@@ -27,6 +27,7 @@ from database import (
     get_conn, init_db,
     save_signal_performance, get_latest_signal_performance,
 )
+from market_calendar import today_kst
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +196,7 @@ def analyze_signal_performance(months: int = 3) -> dict:
     except Exception as e:
         logger.debug("init_db 호출 실패 (무시): %s", e)
 
-    since = (date.today() - timedelta(days=months * 31)).isoformat()
+    since = (today_kst() - timedelta(days=months * 31)).isoformat()
     joined = _fetch_joined_rows(since)
     if not joined:
         logger.info("signal_performance: 분석 대상 추천 없음 (since=%s)", since)

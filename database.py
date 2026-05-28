@@ -368,8 +368,10 @@ def has_briefing_run_for_date(target_date: str) -> bool:
 
 def get_recent_recommended_stocks(days: int = 7) -> list[dict]:
     """최근 N일간 추천된 고유 종목 (중복 횟수 포함). AI에 회피 힌트로 전달"""
-    from datetime import date as _date, timedelta
-    cutoff = (_date.today() - timedelta(days=days)).isoformat()
+    from datetime import timedelta
+    from market_calendar import today_kst
+    today = today_kst()
+    cutoff = (today - timedelta(days=days)).isoformat()
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT stock_code, stock_name,
@@ -379,6 +381,6 @@ def get_recent_recommended_stocks(days: int = 7) -> list[dict]:
                WHERE rec_date >= ? AND rec_date < ?
                GROUP BY stock_code, stock_name
                ORDER BY times DESC, last_date DESC""",
-            (cutoff, _date.today().isoformat()),
+            (cutoff, today.isoformat()),
         ).fetchall()
     return [dict(r) for r in rows]

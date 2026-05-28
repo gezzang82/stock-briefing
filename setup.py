@@ -79,7 +79,7 @@ def kakao_auth():
     if env["KAKAO_CLIENT_SECRET"]:
         data["client_secret"] = env["KAKAO_CLIENT_SECRET"]
 
-    resp = requests.post("https://kauth.kakao.com/oauth/token", data=data)
+    resp = requests.post("https://kauth.kakao.com/oauth/token", data=data, timeout=10)
     if resp.status_code != 200:
         print(f"❌ 토큰 발급 실패: {resp.text}")
         sys.exit(1)

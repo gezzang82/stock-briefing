@@ -4,7 +4,7 @@ OpenAI를 이용한 주식 분석 및 추천 종목 선정
 import json
 import logging
 import re
-from datetime import date
+from market_calendar import today_kst
 
 from openai import OpenAI
 
@@ -127,7 +127,7 @@ def analyze_and_recommend(
     )
     prompt = ANALYSIS_PROMPT.format(
         n=ai_n,
-        date=date.today().strftime("%Y년 %m월 %d일"),
+        date=today_kst().strftime("%Y년 %m월 %d일"),
         kospi=kospi,
         kosdaq=kosdaq,
         news=news_text,

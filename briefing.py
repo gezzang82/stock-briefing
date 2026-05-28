@@ -13,7 +13,7 @@ from database import (
     init_db, save_recommendations,
 )
 from kis_api import kis
-from market_calendar import KST
+from market_calendar import KST, today_kst
 from news_fetcher import fetch_financial_news
 
 logger = logging.getLogger(__name__)
@@ -382,7 +382,7 @@ def _one_recommendation_pass(
     """
     extra_exclude = [
         {"stock_code": c, "stock_name": "(직전 시도 탈락)",
-         "last_date": date.today().isoformat(), "times": 1}
+         "last_date": today_kst().isoformat(), "times": 1}
         for c in excluded_codes
     ]
     excluded_for_ai = (recent or []) + extra_exclude

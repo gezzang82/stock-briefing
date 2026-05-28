@@ -29,7 +29,7 @@ from pathlib import Path
 
 from config import MIN_SCORE_THRESHOLD, TOP_N_STOCKS, TRACKING_DAYS
 from kis_api import kis
-from market_calendar import is_krx_closed
+from market_calendar import is_krx_closed, today_kst
 from technical_screener import (
     compute_indicators, get_volume_ranking, score_candidate, get_daily_ohlcv,
 )
@@ -256,7 +256,7 @@ def run_backtest(start_date: date, end_date: date,
     """
     start_date ~ end_date 범위 영업일마다 backtest_one_date 호출.
     """
-    today = date.today()
+    today = today_kst()
     # 30일 한도 (KIS investor 제약). end_date가 미래면 today로 cap.
     if end_date > today:
         logger.warning("end_date %s → today %s로 cap", end_date, today)

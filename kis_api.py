@@ -170,10 +170,11 @@ class KISClient:
         if code in _NAME_CACHE:
             return _NAME_CACHE[code]
 
-        from datetime import date, timedelta
+        from datetime import timedelta
+        from market_calendar import today_kst
         url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-        end = date.today().strftime("%Y%m%d")
-        start = (date.today() - timedelta(days=7)).strftime("%Y%m%d")
+        end = today_kst().strftime("%Y%m%d")
+        start = (today_kst() - timedelta(days=7)).strftime("%Y%m%d")
         params = {
             "FID_COND_MRKT_DIV_CODE": "J",
             "FID_INPUT_ISCD": code,
@@ -210,11 +211,12 @@ class KISClient:
         endpoint: /uapi/domestic-stock/v1/quotations/inquire-index-daily-price
         tr_id: FHPUP02120000 (지수 일자별 시세)
         """
-        from datetime import date, timedelta
+        from datetime import timedelta
+        from market_calendar import today_kst
         url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-daily-price"
         code = INDEX_CODES.get(market.upper(), "0001")
-        end = date.today().strftime("%Y%m%d")
-        start = (date.today() - timedelta(days=int(days * 1.6))).strftime("%Y%m%d")
+        end = today_kst().strftime("%Y%m%d")
+        start = (today_kst() - timedelta(days=int(days * 1.6))).strftime("%Y%m%d")
         params = {
             "FID_PERIOD_DIV_CODE": "D",
             "FID_COND_MRKT_DIV_CODE": "U",

@@ -32,6 +32,20 @@ def _today_kst() -> date:
     return datetime.now(KST).date()
 
 
+def today_kst() -> date:
+    """
+    KST 기준 오늘 날짜 (public).
+
+    ⚠️ 한국 시장 데이터를 다루는 모든 모듈은 date.today() 대신 이 함수를 써야 한다.
+    GitHub Actions 러너는 UTC 기본이라 새벽~아침에 date.today() 호출 시
+    하루 어긋난 날짜를 반환 (예: KST 06:30 = UTC 21:30 전날).
+
+    데이터 범위 조회, 캐시 키, 로그 날짜, AI 프롬프트 내 "오늘" 표기 등
+    모든 날짜 컨텍스트에 일관되게 사용.
+    """
+    return datetime.now(KST).date()
+
+
 def is_krx_closed(d: date | None = None) -> tuple[bool, str]:
     """KRX 휴장 여부와 사유 반환. (closed, reason)"""
     d = d or _today_kst()
