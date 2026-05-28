@@ -28,8 +28,24 @@ def _format_index(name: str, data: dict | None) -> str:
 
 # ============== 검증 헬퍼 ==============
 
-# KIS iscd_stat_cls_code 비정상 (51~59 = 관리/거래정지/정리매매 류)
-_BAD_STATUS_CODES = {"51", "52", "53", "54", "55", "56", "57", "58", "59"}
+# KIS iscd_stat_cls_code 의 진짜 거래정지 코드 (보수적 정의).
+#
+# ⚠️ 변경 이력 (2026-05-28):
+#   기존: 51~59 전체를 거래정지로 처리 → 영업일에도 정상 종목 광범위 차단.
+#   조사: raw 응답 로깅으로 확인한 결과 (briefing.py: _log_kis_status_debug)
+#     - stat=55: 휴장/시간외 시간대의 모든 정상 종목 (삼성전자, 하이닉스 등 정상 시세)
+#     - stat=57: 상한가 도달 종목 (change_pct +29% 근처)
+#     - 휴장일(5/24)에도 정상 종목들이 stat=55, 57로 반환됨
+#     - 다른 거래정지 필드(temp_stop_yn, sltr_yn 등)는 N으로 정상
+#   결론: stat 54~59 는 거래정지가 아니라 시간/가격 상태 코드.
+#
+# 진짜 거래정지/관리종목 판정은 아래 명시적 필드로 수행:
+#   - temp_stop_yn  (임시 거래정지)
+#   - sltr_yn       (정리매매)
+#   - mang_issu_cls_code (관리종목)
+#   - mrkt_warn_cls_code (시장경고)
+# stat 코드는 51, 52, 53만 보조 차단 (위 필드와 중복일 수 있지만 안전망).
+_BAD_STATUS_CODES = {"51", "52", "53"}
 
 ETF_BRAND_PREFIXES = (
     "KODEX ", "TIGER ", "ARIRANG ", "KBSTAR ", "HANARO ", "KOSEF ",
@@ -105,11 +121,11 @@ def _check_tradeable(pdata: dict) -> tuple[bool, str]:
     """
     stat = (pdata.get("iscd_stat_cls_code") or "00").strip()
     if stat in _BAD_STATUS_CODES:
+        # 51~53만 안전망 차단. 54~59는 시간/가격 상태로 추정되어 제외 (2026-05-28 확인).
         labels = {
-            "51": "관리종목", "52": "거래정지", "53": "정리매매",
-            "54": "정리매매(공시기준)", "55": "매매거래정지",
-            "56": "매매중단(상장폐지)", "57": "매매중단(상장폐지예고)",
-            "58": "매매중단", "59": "단기과열",
+            "51": "관리종목",
+            "52": "거래정지",
+            "53": "정리매매",
         }
         return False, f"{labels.get(stat, '상태이상')} (코드 {stat})"
 
