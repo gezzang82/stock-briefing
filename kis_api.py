@@ -335,5 +335,121 @@ class KISClient:
         prdt_type = _NAME_CACHE.get(f"_type_{code}", "")
         return any(kw in prdt_type for kw in ["ETF", "ETN", "ELW"])
 
+    def _get_investor_buy_ranking(
+        self, investor_type: str, count: int, market: str = "ALL",
+    ) -> list[dict]:
+        """
+        외국인/기관 순매수 상위 종목 조회 (공통 내부 함수).
+
+        Args:
+            investor_type: "foreign" (외국인) | "institution" (기관)
+            count: 상위 N개
+            market: "ALL" | "KOSPI" | "KOSDAQ"
+
+        Returns:
+            [{code, name, current_price, change_pct, volume, net_buy_value_won}, ...]
+            net_buy_value_won 단위: 원 (해당 investor의 순매수 금액)
+
+        TR_ID:
+            FHPST01740000 — 외국인기관 매매 상위 종목
+        Endpoint:
+            /uapi/domestic-stock/v1/ranking/foreign-institution-total
+        FID_RANK_SORT_CLS_CODE:
+            "0" = 순매수수량 / "1" = 순매수금액 (우리는 금액 기준)
+        FID_TRGT_CLS_CODE 분리:
+            외국인은 frgn_*, 기관은 orgn_* prefix 필드 분리
+        """
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/ranking/foreign-institution-total"
+        tr_id = "FHPTJ04400000"  # 외국인기관 매매 상위 종합
+        market_code = {"ALL": "0000", "KOSPI": "0001", "KOSDAQ": "1001"}.get(market, "0000")
+
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_COND_SCR_DIV_CODE": "16449",
+            "FID_INPUT_ISCD": market_code,
+            "FID_RANK_SORT_CLS_CODE": "0",       # 0=순매수금액 상위
+            "FID_RANK_SORT_CLS_CODE_2": "0",
+            "FID_INPUT_DATE_1": "",
+        }
+
+        try:
+            resp = requests.get(url, headers=self._headers(tr_id),
+                                params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("rt_cd") != "0":
+                logger.warning(
+                    "외국인기관 매매상위 API 실패 (%s): %s",
+                    investor_type, data.get("msg1"),
+                )
+                return []
+
+            # 한국 ETF/ETN 필터 (technical_screener와 동일 패턴)
+            ETF_BRAND_PREFIXES = (
+                "KODEX ", "TIGER ", "ARIRANG ", "KBSTAR ", "HANARO ", "KOSEF ",
+                "KINDEX ", "KIWOOM ", "ACE ", "SOL ", "RISE ", "WOORI ", "TREX ",
+                "FOCUS ", "PLUS ", "FN ", "MASTER ", "SMART ", "TIMEFOLIO ",
+                "WON ", "BIG ", "마이다스 ",
+            )
+            ETF_NAME_KEYWORDS = (
+                "ETF", "ETN", "SPAC", "리츠", "스팩", "우B",
+                "액티브", "선물지수", "인버스", "레버리지",
+            )
+
+            # investor_type별 사용할 net buy 필드 결정
+            # KIS는 응답에서 외국인/기관 net buy를 동시에 반환하기도 함.
+            net_field = {
+                "foreign":     "frgn_ntby_tr_pbmn",   # 외국인 순매수금액
+                "institution": "orgn_ntby_tr_pbmn",   # 기관 순매수금액
+            }.get(investor_type, "frgn_ntby_tr_pbmn")
+
+            out = []
+            for r in data.get("output", []) or []:
+                code = (r.get("mksc_shrn_iscd") or "").strip()
+                name = (r.get("hts_kor_isnm") or "").strip()
+                if not (len(code) == 6 and code.isdigit()):
+                    continue
+                if any(name.startswith(p) for p in ETF_BRAND_PREFIXES):
+                    continue
+                if any(kw in name for kw in ETF_NAME_KEYWORDS):
+                    continue
+                if name.endswith("우") and len(name) >= 3:  # 우선주
+                    continue
+                try:
+                    out.append({
+                        "code": code,
+                        "name": name,
+                        "current_price": float(r.get("stck_prpr", 0) or 0),
+                        "change_pct": float(r.get("prdy_ctrt", 0) or 0),
+                        "volume": int(r.get("acml_vol", 0) or 0),
+                        "net_buy_value_won": int(r.get(net_field, 0) or 0),
+                    })
+                    cache_stock_name(code, name)
+                except (ValueError, TypeError) as e:
+                    logger.debug("매매상위 행 파싱 실패: %s", e)
+                if len(out) >= count:
+                    break
+            return out
+
+        except Exception as e:
+            # graceful fallback — 호출자가 거래량 후보만으로 진행 가능
+            logger.warning(
+                "%s 순매수 상위 조회 실패 (graceful fallback): %s",
+                investor_type, e,
+            )
+            return []
+
+    def get_foreign_buy_ranking(
+        self, count: int = 30, market: str = "ALL",
+    ) -> list[dict]:
+        """외국인 순매수금액 상위 종목."""
+        return self._get_investor_buy_ranking("foreign", count, market)
+
+    def get_institution_buy_ranking(
+        self, count: int = 30, market: str = "ALL",
+    ) -> list[dict]:
+        """기관 순매수금액 상위 종목."""
+        return self._get_investor_buy_ranking("institution", count, market)
+
 
 kis = KISClient()

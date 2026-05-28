@@ -283,6 +283,8 @@ def _save_decision_snapshot(
             "name": c.get("name"),
             "tech_score": round(c.get("score", 0), 2),
             "signals": c.get("signals", []),
+            # 후보 풀 출처 (volume_rank / foreign_buy_rank / institution_buy_rank)
+            "sources": c.get("sources", ["volume_rank"]),
             "current_price": c.get("current_price"),
             "change_pct": c.get("change_pct"),
             "volume": c.get("volume"),

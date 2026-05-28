@@ -327,9 +327,106 @@ def score_candidate(ind: dict, supply: dict,
 
 # ============== 메인 ==============
 
+# 후보 풀 보너스 점수 (수급 시그널 강한 후보에 우대)
+# 보수적으로 시작 — 큰 가중치 변경 X, 점수 기준점은 그대로 유지하면서 우대 종목만 약간 boost
+FOREIGN_BUY_RANK_BONUS = 5.0    # 외국인 순매수 상위 종목
+INSTIT_BUY_RANK_BONUS = 3.0     # 기관 순매수 상위 종목
+# 둘 다이면 최대 +8 (위 두 보너스 합산)
+
+
+def _merge_candidate_pools(
+    volume_top: list[dict],
+    foreign_top: list[dict],
+    instit_top: list[dict],
+) -> list[dict]:
+    """
+    세 풀 (거래량 / 외국인 매수 / 기관 매수) 을 종목코드 기준 union.
+    중복 종목은 source 라벨을 모두 보존하여 강한 시그널로 식별.
+
+    Returns:
+        list of {code, name, current_price, change_pct, volume,
+                 volume_ratio_kis, sources: set[str], net_buy_value_won?}
+        - sources: {'volume_rank', 'foreign_buy_rank', 'institution_buy_rank'}
+          중 해당하는 것 모두 포함
+    """
+    merged: dict[str, dict] = {}
+
+    # 1차: 거래량 순위 (기존 풀)
+    for v in volume_top:
+        code = v["code"]
+        merged[code] = {**v, "sources": {"volume_rank"}}
+
+    # 2차: 외국인 순매수 상위
+    for v in foreign_top:
+        code = v["code"]
+        if code in merged:
+            merged[code]["sources"].add("foreign_buy_rank")
+        else:
+            merged[code] = {**v, "sources": {"foreign_buy_rank"}}
+
+    # 3차: 기관 순매수 상위
+    for v in instit_top:
+        code = v["code"]
+        if code in merged:
+            merged[code]["sources"].add("institution_buy_rank")
+        else:
+            merged[code] = {**v, "sources": {"institution_buy_rank"}}
+
+    return list(merged.values())
+
+
+def _apply_source_bonus(
+    score: float, signals: list[str], sources: set[str],
+) -> tuple[float, list[str]]:
+    """
+    후보 풀 출처에 따른 보너스 점수 + signal 라벨 추가.
+    중복 출처일수록 강한 수급 시그널로 간주.
+
+    라벨 규칙:
+      - 거래량+외국인:  "거래량 급증 + 외국인 순매수 상위"
+      - 거래량+기관:    "거래량 급증 + 기관 순매수 상위"
+      - 외국인+기관(거래량X): "외국인+기관 동시 순매수 상위"
+      - 3축 다 해당:    "거래량 급증 + 외국인 순매수 상위" + "기관 순매수 상위"
+        (외국인 라벨에 이미 거래량이 표시되어 중복 회피)
+    """
+    bonus = 0.0
+    has_volume = "volume_rank" in sources
+    has_foreign = "foreign_buy_rank" in sources
+    has_instit = "institution_buy_rank" in sources
+
+    if has_foreign:
+        bonus += FOREIGN_BUY_RANK_BONUS
+        if has_volume:
+            signals.append("거래량 급증 + 외국인 순매수 상위")
+        else:
+            signals.append("외국인 순매수 상위")
+
+    if has_instit:
+        bonus += INSTIT_BUY_RANK_BONUS
+        # 외국인이 같이면 외국인 라벨에 이미 거래량이 들어있어 단순 "기관" 라벨만
+        # 그 외엔 거래량 유무에 따라 prefix
+        if has_foreign:
+            signals.append("기관 순매수 상위")
+        elif has_volume:
+            signals.append("거래량 급증 + 기관 순매수 상위")
+        else:
+            signals.append("기관 순매수 상위")
+
+    return score + bonus, signals
+
+
 def screen_candidates(top_n: int = 20,
                       weights: dict | None = None) -> list[dict]:
-    """기술적 스크리닝 전체 파이프라인. weights로 regime 가중치 적용."""
+    """
+    기술적 스크리닝 전체 파이프라인. weights로 regime 가중치 적용.
+
+    후보 풀:
+      1. 거래량 급증 (volume_rank) — KIS 거래량 순위 API
+      2. 외국인 순매수 상위 (foreign_buy_rank) — KIS 외국인기관 매매상위 API
+      3. 기관 순매수 상위 (institution_buy_rank) — 동일 API의 기관 필드
+
+    세 풀을 종목코드 기준 union 후 지표 계산 → 점수화 + source 보너스.
+    """
     if weights:
         logger.info(
             "기술적 스크리닝 시작 (외국인 %d / 기관 %d / 거래대금 %d)",
@@ -338,14 +435,36 @@ def screen_candidates(top_n: int = 20,
     else:
         logger.info("기술적 스크리닝 시작 (기본 가중치)")
 
+    # 1) 세 후보 풀 수집 (각각 graceful fallback)
     volume_top = get_volume_ranking(count=30)
     if not volume_top:
         logger.warning("거래량 순위 조회 결과 없음 — 스크리닝 건너뜀")
         return []
-    logger.info("거래량 순위 1차 후보: %d개", len(volume_top))
 
+    # 외국인/기관 풀은 실패해도 거래량 후보만으로 진행 (소스 추가만 안 됨)
+    foreign_top: list[dict] = []
+    instit_top: list[dict] = []
+    try:
+        foreign_top = kis.get_foreign_buy_ranking(count=20)
+    except Exception as e:
+        logger.warning("외국인 순매수 상위 조회 실패 (volume only로 fallback): %s", e)
+    try:
+        instit_top = kis.get_institution_buy_ranking(count=20)
+    except Exception as e:
+        logger.warning("기관 순매수 상위 조회 실패 (volume only로 fallback): %s", e)
+
+    logger.info(
+        "후보 풀: 거래량 %d개 + 외국인매수 %d개 + 기관매수 %d개",
+        len(volume_top), len(foreign_top), len(instit_top),
+    )
+
+    # 2) Union merge (중복 종목은 sources 다중 포함)
+    pool = _merge_candidate_pools(volume_top, foreign_top, instit_top)
+    logger.info("merge 후 후보 풀: %d개 (중복 제거)", len(pool))
+
+    # 3) 각 종목 지표 계산 + 점수 + 보너스
     candidates = []
-    for v in volume_top:
+    for v in pool:
         ohlcv = get_daily_ohlcv(v["code"], days=60)
         time.sleep(0.1)
         if not ohlcv:
@@ -355,8 +474,14 @@ def screen_candidates(top_n: int = 20,
             continue
         supply = compute_supply_demand(v["code"], ohlcv)
         score, signals = score_candidate(ind, supply, weights=weights)
+
+        # 후보 풀 출처 보너스
+        score, signals = _apply_source_bonus(score, signals, v["sources"])
+
         candidates.append({
-            **v, "indicators": ind, "supply": supply,
+            **v,
+            "sources": sorted(list(v["sources"])),   # JSON 직렬화 위해 list로
+            "indicators": ind, "supply": supply,
             "score": score, "signals": signals,
         })
 
@@ -364,9 +489,16 @@ def screen_candidates(top_n: int = 20,
     top = candidates[:top_n]
 
     if top:
+        # source별 분포 로깅
+        from collections import Counter
+        src_counts = Counter()
+        for c in top:
+            for s in c["sources"]:
+                src_counts[s] += 1
         logger.info(
-            "스크리닝 완료: %d개 → 상위 %d개 (점수 %.0f~%.0f)",
+            "스크리닝 완료: %d개 → 상위 %d개 (점수 %.0f~%.0f) | sources: %s",
             len(candidates), len(top), top[0]["score"], top[-1]["score"],
+            dict(src_counts),
         )
     else:
         logger.warning("스크리닝 결과 없음")
