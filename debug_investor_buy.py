@@ -28,11 +28,21 @@ from kis_api import kis
 from config import KIS_BASE_URL
 
 
-# 가장 유력한 endpoint + TR_ID
+# 후보 endpoint + TR_ID — KIS Open API의 외국인/기관 매매상위 관련
+# 첫 시도(/ranking/foreign-institution-total)는 404 → 경로 추정 후보 다수 시도.
+# 정상 응답(rt_cd=='0')하는 조합만 진짜 사용해야 함.
 ENDPOINTS = [
-    ("/uapi/domestic-stock/v1/ranking/foreign-institution-total", "FHPTJ04400000"),
-    # 만약 위가 빈 결과면 아래도 시도해볼 수 있음 (KIS 변형 endpoint)
-    # ("/uapi/domestic-stock/v1/quotations/foreign-institution-total", "FHPTJ04400000"),
+    # 가장 자주 보이는 quotations 카테고리
+    ("/uapi/domestic-stock/v1/quotations/foreign-institution-total", "FHPTJ04400000"),
+    # KIS GitHub 샘플의 외국인 매매 종목별 추이
+    ("/uapi/domestic-stock/v1/quotations/inquire-foreign-purchase-trend",
+     "FHKST01010900"),
+    # 외국인 매매 상위 — 별도 path 가능성
+    ("/uapi/domestic-stock/v1/quotations/exp-foreigners",
+     "FHPST04540000"),
+    # 외국인 순매매 종목 추이
+    ("/uapi/domestic-stock/v1/quotations/inquire-investor",
+     "FHKST01010900"),
 ]
 
 
