@@ -359,7 +359,12 @@ class KISClient:
         FID_TRGT_CLS_CODE 분리:
             외국인은 frgn_*, 기관은 orgn_* prefix 필드 분리
         """
-        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/ranking/foreign-institution-total"
+        # ✅ 2026-05-29 디버그로 확정된 endpoint + TR_ID + 필수 파라미터 셋:
+        #   URL: /uapi/domestic-stock/v1/quotations/foreign-institution-total
+        #        (이전: /ranking/foreign-institution-total — 404 발생)
+        #   필수: FID_DIV_CLS_CODE / FID_ETC_CLS_CODE / FID_TRGT_CLS_CODE /
+        #         FID_TRGT_EXLS_CLS_CODE 누락 시 "ERROR INPUT FIELD NOT FOUND" 반환
+        url = f"{KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total"
         tr_id = "FHPTJ04400000"  # 외국인기관 매매 상위 종합
         market_code = {"ALL": "0000", "KOSPI": "0001", "KOSDAQ": "1001"}.get(market, "0000")
 
@@ -367,9 +372,18 @@ class KISClient:
             "FID_COND_MRKT_DIV_CODE": "J",
             "FID_COND_SCR_DIV_CODE": "16449",
             "FID_INPUT_ISCD": market_code,
-            "FID_RANK_SORT_CLS_CODE": "0",       # 0=순매수금액 상위
+            "FID_DIV_CLS_CODE": "0",                  # 0=일반 (KIS 문서 미확정 — 다른 값 검토 가능)
+            "FID_RANK_SORT_CLS_CODE": "0",            # 0=순매수금액 상위
             "FID_RANK_SORT_CLS_CODE_2": "0",
             "FID_INPUT_DATE_1": "",
+            # KIS 응답 ERROR 방지용 필드 (디버그로 검증된 셋)
+            "FID_ETC_CLS_CODE": "",
+            "FID_TRGT_CLS_CODE": "111111111",         # 일반/우선/투자 등 전부 포함
+            "FID_TRGT_EXLS_CLS_CODE": "0000000000",   # 제외 없음
+            "FID_INPUT_PRICE_1": "",
+            "FID_INPUT_PRICE_2": "",
+            "FID_VOL_CNT": "",
+            "FID_BLNG_CLS_CODE": "",
         }
 
         try:
