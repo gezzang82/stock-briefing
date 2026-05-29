@@ -139,20 +139,26 @@ def main():
     print()
 
     # 메인 endpoint 호출
-    # FID_DIV_CLS_CODE는 KIS 응답에서 누락 시 ERROR INPUT FIELD NOT FOUND 반환 → 필수.
-    # 값 의미는 KIS 문서 미확인이라 0, 1, 2 모두 시도.
-    DIV_CLS_VALUES = ["0", "1", "2"]
-
+    # KIS가 한 번에 한 필드 누락만 알려줌 → 가능한 모든 일반 FID 필드를 한 번에 채움.
+    # 값 의미가 모호한 필드는 빈 문자열 또는 일반적인 기본값으로.
     for url_path, tr_id in ENDPOINTS:
-        for div_cls in DIV_CLS_VALUES:
+        for div_cls in ["0", "1", "2"]:
             params = {
                 "FID_COND_MRKT_DIV_CODE": "J",
                 "FID_COND_SCR_DIV_CODE": "16449",
                 "FID_INPUT_ISCD": market_code,
-                "FID_DIV_CLS_CODE": div_cls,                  # ← 추가
+                "FID_DIV_CLS_CODE": div_cls,
                 "FID_RANK_SORT_CLS_CODE": args.sort,
                 "FID_RANK_SORT_CLS_CODE_2": args.sort2,
                 "FID_INPUT_DATE_1": "",
+                # 일반 KIS 추가 필드들 (KIS API가 종종 요구)
+                "FID_ETC_CLS_CODE": "",
+                "FID_TRGT_CLS_CODE": "111111111",       # 일반/우선/투자/외국인 등 전부
+                "FID_TRGT_EXLS_CLS_CODE": "0000000000",  # 제외 없음
+                "FID_INPUT_PRICE_1": "",
+                "FID_INPUT_PRICE_2": "",
+                "FID_VOL_CNT": "",
+                "FID_BLNG_CLS_CODE": "",
             }
             result = call(url_path, tr_id, params)
             summarize(result, f"{tr_id} @ {url_path}  (DIV_CLS={div_cls})")
