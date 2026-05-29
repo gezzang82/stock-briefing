@@ -28,21 +28,10 @@ from kis_api import kis
 from config import KIS_BASE_URL
 
 
-# 후보 endpoint + TR_ID — KIS Open API의 외국인/기관 매매상위 관련
-# 첫 시도(/ranking/foreign-institution-total)는 404 → 경로 추정 후보 다수 시도.
-# 정상 응답(rt_cd=='0')하는 조합만 진짜 사용해야 함.
+# 확정된 endpoint — 2차 디버그에서 검증됨
+# /quotations/foreign-institution-total + FHPTJ04400000 → HTTP 200 응답
 ENDPOINTS = [
-    # 가장 자주 보이는 quotations 카테고리
     ("/uapi/domestic-stock/v1/quotations/foreign-institution-total", "FHPTJ04400000"),
-    # KIS GitHub 샘플의 외국인 매매 종목별 추이
-    ("/uapi/domestic-stock/v1/quotations/inquire-foreign-purchase-trend",
-     "FHKST01010900"),
-    # 외국인 매매 상위 — 별도 path 가능성
-    ("/uapi/domestic-stock/v1/quotations/exp-foreigners",
-     "FHPST04540000"),
-    # 외국인 순매매 종목 추이
-    ("/uapi/domestic-stock/v1/quotations/inquire-investor",
-     "FHKST01010900"),
 ]
 
 
@@ -150,19 +139,24 @@ def main():
     print()
 
     # 메인 endpoint 호출
+    # FID_DIV_CLS_CODE는 KIS 응답에서 누락 시 ERROR INPUT FIELD NOT FOUND 반환 → 필수.
+    # 값 의미는 KIS 문서 미확인이라 0, 1, 2 모두 시도.
+    DIV_CLS_VALUES = ["0", "1", "2"]
+
     for url_path, tr_id in ENDPOINTS:
-        # 기존 코드에서 사용한 파라미터 (foreign-institution-total)
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_COND_SCR_DIV_CODE": "16449",
-            "FID_INPUT_ISCD": market_code,
-            "FID_RANK_SORT_CLS_CODE": args.sort,
-            "FID_RANK_SORT_CLS_CODE_2": args.sort2,
-            "FID_INPUT_DATE_1": "",
-        }
-        result = call(url_path, tr_id, params)
-        summarize(result, f"{tr_id} @ {url_path}")
-        print()
+        for div_cls in DIV_CLS_VALUES:
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_COND_SCR_DIV_CODE": "16449",
+                "FID_INPUT_ISCD": market_code,
+                "FID_DIV_CLS_CODE": div_cls,                  # ← 추가
+                "FID_RANK_SORT_CLS_CODE": args.sort,
+                "FID_RANK_SORT_CLS_CODE_2": args.sort2,
+                "FID_INPUT_DATE_1": "",
+            }
+            result = call(url_path, tr_id, params)
+            summarize(result, f"{tr_id} @ {url_path}  (DIV_CLS={div_cls})")
+            print()
 
 
 if __name__ == "__main__":
