@@ -164,11 +164,16 @@ flowchart TD
     C --> D[📡 데이터 수집]
     D --> D1[KIS 지수<br/>KOSPI/KOSDAQ]
     D --> D2[Naver 뉴스<br/>가중치 + 감성]
-    D --> D3[KIS 거래량 순위<br/>+ 일봉 + 수급]
+    D --> D3[KIS 거래량 순위<br/>거래증가율 TOP 30]
+    D --> D4[KIS 외국인 매수상위<br/>FHPTJ04400000]
+    D --> D5[KIS 기관 매수상위<br/>FHPTJ04400000]
     D1 --> E[🌐 시장 상태 판단<br/>bullish/sideways/bearish]
     D2 --> E
-    D3 --> E
-    E --> F[🔬 기술적 스크리닝<br/>외국인 + 기관 + 거래대금]
+    D3 --> POOL[🔀 후보 풀 merge<br/>3 sources union]
+    D4 --> POOL
+    D5 --> POOL
+    POOL --> F[🔬 기술적 스크리닝<br/>지표 + 점수 + source 보너스]
+    E --> F
     F --> SP[📊 시그널 성과 캐시<br/>signal_performance]
     SP --> G[🤖 AI 분석<br/>gpt-4o-mini]
     G --> H{검증 4단계}
@@ -184,8 +189,11 @@ flowchart TD
     style AB fill:#64748b,stroke:#475569,color:#fff
     style BI fill:#0ea5e9,stroke:#0284c7,color:#fff
     style E fill:#9b59b6,stroke:#8e44ad,color:#fff
+    style POOL fill:#0d9488,stroke:#0f766e,color:#fff
     style F fill:#16a085,stroke:#138d75,color:#fff
     style SP fill:#0891b2,stroke:#0e7490,color:#fff
+    style D4 fill:#14b8a6,stroke:#0d9488,color:#fff
+    style D5 fill:#14b8a6,stroke:#0d9488,color:#fff
     style G fill:#e67e22,stroke:#d35400,color:#fff
     style J fill:#16a34a,stroke:#15803d,color:#fff
     style L fill:#f1c40f,stroke:#f39c12,color:#fff
@@ -231,15 +239,15 @@ flowchart TD
 
 <!-- 3. 데이터 수집 -->
 <section>
-  <h2><span class="num">3</span> 데이터 수집</h2>
+  <h2><span class="num">3</span> 데이터 수집 — 3축 후보 풀</h2>
   <div class="grid grid-3">
     <div class="card blue">
       <h3><span class="ic">📈</span> KIS 시장 데이터</h3>
       <p>한국투자증권 Open API로 시세, 거래량, 투자자별 매매동향, 프로그램 매매 수집.</p>
       <span class="tag blue">KOSPI/KOSDAQ 지수</span>
-      <span class="tag blue">거래량 순위 50개</span>
-      <span class="tag blue">일봉 60일치</span>
-      <span class="tag blue">외국인 + 기관 매매</span>
+      <span class="tag blue">거래량 순위 (TR FHPST01710000)</span>
+      <span class="tag teal">외국인기관 매매상위 (TR FHPTJ04400000)</span>
+      <span class="tag blue">일봉 60일치 + 종목별 외국인/기관 5일 누적</span>
     </div>
     <div class="card green">
       <h3><span class="ic">📰</span> Naver 뉴스</h3>
@@ -299,17 +307,23 @@ flowchart TD
   <h2><span class="num">5</span> 기술적 스크리닝 + AI 분석</h2>
   <div class="grid grid-2">
     <div class="card teal">
-      <h3><span class="ic">🔬</span> 스크리닝 (점수 0~100)</h3>
-      <p>KIS 거래량 상위 50개 → ETF 필터 → 5일 외국인/기관 누적 + 거래대금 증가율 기반 점수.</p>
+      <h3><span class="ic">🔬</span> 스크리닝 (점수 0~100 + 보너스)</h3>
+      <p>3 후보 풀(거래량/외국인매수/기관매수) union → ETF 필터 → 5일 누적 수급 + 거래대금 기반 점수.
+      중복 종목(여러 풀 동시 등장)은 강한 시그널로 간주해 보너스 점수.</p>
       <span class="tag green">외국인 비중 → 0~40점</span>
       <span class="tag green">기관 비중 → 0~30점</span>
       <span class="tag green">거래대금 증가율 → 0~30점</span>
+      <br>
+      <span class="tag teal">+ 외국인 순매수 상위 보너스 +5</span>
+      <span class="tag teal">+ 기관 순매수 상위 보너스 +3</span>
+      <span class="tag teal">+ 둘 다 해당시 +8 (최대)</span>
     </div>
     <div class="card orange">
       <h3><span class="ic">🤖</span> AI 종합 (gpt-4o-mini)</h3>
-      <p>뉴스 + 기술 후보 + 시장 상태 + 회피 종목 → JSON 13개 추천 생성. 검증 후 부족하면 자동 재시도.</p>
+      <p>뉴스 + 기술 후보 + 시장 상태 + 시그널 성과 + 회피 종목 → JSON 13개 추천 생성. 검증 후 부족하면 자동 재시도.</p>
       <span class="tag orange">뉴스 enriched 컨텍스트</span>
-      <span class="tag orange">기술 후보 20개 + 시그널</span>
+      <span class="tag orange">후보 20개 + sources + 시그널</span>
+      <span class="tag orange">시그널 성과 캐시 (참고용)</span>
       <span class="tag orange">최대 2회 자동 재추천</span>
     </div>
   </div>
@@ -476,7 +490,7 @@ flowchart TD
 </section>
 
 <footer>
-  생성: 2026-05-29 08:26 KST · 매 브리핑마다 자동 갱신<br>
+  생성: 2026-05-30 10:33 KST · 매 브리핑마다 자동 갱신<br>
   <a href="./">메인 대시보드</a> ·
   <a href="./demo.html">🎨 디자인 미리보기</a> ·
   <a href="https://github.com/gezzang82/stock-briefing" target="_blank">GitHub</a>
