@@ -110,6 +110,19 @@ jobs:
             echo "변경 없음 — 커밋 생략"
           fi
 
+      - name: 브리핑 자체 검증 (health check)
+        # 항상 실행 (브리핑 실패해도 진단 정보 확보)
+        # 정상이면 카톡 침묵 / 이상이면 별도 경고 카톡 1회 발송
+        if: always()
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_ACCESS_TOKEN: ${{ secrets.KAKAO_ACCESS_TOKEN }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          # force 모드 시 경고 카톡 발송 skip (디버그 trigger 노이즈 방지)
+          BRIEFING_FORCE_FLAG: ${{ github.event.inputs.force }}
+        run: python health_check.py --skip-on-force
+
       # GitHub Pages 설정: Settings → Pages → Source = "Deploy from a branch"
       # Branch: main / Folder: /docs (GitHub Pages가 root와 /docs만 지원)
       # codeload 외부 액션 의존성 없음.
