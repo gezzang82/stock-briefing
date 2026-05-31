@@ -50,38 +50,8 @@ def fetch_period_items(days: int = 7) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# 섹터명 정규화 — AI가 매번 다른 표기로 분류해 같은 섹터가 여러 행으로 나뉘는 문제 대응.
-# (예: "제약 바이오" + "제약/바이오" → "제약/바이오" 1행으로 합산)
-SECTOR_ALIASES = {
-    # 제약/바이오 계열 통합
-    "제약 바이오": "제약/바이오",
-    "바이오/제약": "제약/바이오",
-    "바이오": "제약/바이오",
-    "헬스케어": "제약/바이오",
-    "의약품": "제약/바이오",
-    # IT 계열 통합 (사용자 요구사항)
-    "IT": "IT",
-    "IT/서비스": "IT",
-    "IT/통신장비": "IT",
-    "통신장비": "IT",
-    "통신": "IT",
-    "소프트웨어": "IT",
-    "소프트웨어/IT": "IT",
-    "인터넷": "IT",
-    # 전자/반도체는 별도 유지 (산업 분류상 다른 카테고리)
-    "전자": "전자",
-    "반도체": "반도체",
-    # AI는 별도 유지 (테마성 섹터)
-    "AI": "AI",
-}
-
-
-def _normalize_sector(s: str | None) -> str | None:
-    """섹터명 정규화 — alias 매핑. 없는 키는 trim만 적용해 그대로 반환."""
-    if not s:
-        return None
-    key = s.strip()
-    return SECTOR_ALIASES.get(key, key)
+# 섹터명 정규화 — sector_utils 모듈 사용 (html_report와 공유 매핑)
+from sector_utils import normalize_sector as _normalize_sector
 
 
 def fetch_sector_performance(days: int = 30) -> list[dict]:

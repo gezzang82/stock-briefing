@@ -476,7 +476,11 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
 
 
 def _sector_tag(sector: str | None) -> str:
-    """진한 글자색 + 같은 색의 연한 배경"""
+    """진한 글자색 + 같은 색의 연한 배경. 정규화 후 표시."""
+    # raw sector ('제약 바이오', 'IT/통신장비' 등) → 정규화 ('제약/바이오', 'IT')
+    # 종목 리스트와 섹터 테이블 모두 같은 표기로 일관성 유지
+    from sector_utils import normalize_sector
+    sector = normalize_sector(sector)
     if not sector or sector == "-":
         return '<span class="sector-tag" style="color:#7f8c8d;background:#ecf0f1">-</span>'
     color = _sector_color(sector)
