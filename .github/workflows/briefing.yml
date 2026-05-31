@@ -113,7 +113,10 @@ jobs:
       - name: 브리핑 자체 검증 (health check)
         # 항상 실행 (브리핑 실패해도 진단 정보 확보)
         # 정상이면 카톡 침묵 / 이상이면 별도 경고 카톡 1회 발송
+        # ⚠️ continue-on-error: true — health_check 자체 실패가 브리핑 실패로 이어지지 않도록.
+        #    (health_check는 운영 감시 역할만 — 브리핑 본체와 결합도 0)
         if: always()
+        continue-on-error: true
         env:
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
@@ -121,7 +124,7 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           # force 모드 시 경고 카톡 발송 skip (디버그 trigger 노이즈 방지)
           BRIEFING_FORCE_FLAG: ${{ github.event.inputs.force }}
-        # --post-brief: snapshot 기반 brief 결과 진단 (이상 시 카톡)
+        # --post-brief: snapshot 기반 brief 결과 진단 (외부 API 호출 0, DB+로그만)
         # --skip-on-force: force trigger 노이즈 방지
         run: python health_check.py --post-brief --skip-on-force
 

@@ -361,26 +361,73 @@ def run_system_diagnostic() -> int:
 
 
 # ============================================================
-#  Mode 2: Post-brief 자체 검증 (--post-brief)
+#  Mode 2: Post-brief 경량 자체 검증 (--post-brief)
 #  09:05 brief 후 snapshot 기반 결과 진단.
+#
+#  ⚠️ 외부 API 호출 일절 금지 (안정화 모드):
+#     - KIS / 카카오 / 네이버 / GitHub 등 모든 외부 API 차단
+#     - DB(snapshot_logs, recommendations) + 로그 파일만 read
+#     - 검사 자체가 새 장애 원인이 되지 않도록 보장
 #  이상 발견 시 경고 카톡 발송 (단, --skip-on-force + force 모드면 skip).
 # ============================================================
+
+from pathlib import Path
 
 SEVERITY_CRITICAL = "critical"
 SEVERITY_WARNING = "warning"
 
-DROP_HIGH_RATIO_THRESHOLD = 0.7
-TRADE_STATUS_DROP_KEYWORDS = (
-    "거래정지", "매매중단", "관리종목", "정리매매", "단기과열", "시장경고",
-)
+LOG_PATH = Path(__file__).parent / "logs" / "briefing.log"
+
+# D 검사용 — briefing.log에서 카톡 발송 결과 마커 (briefing.py / kakao_sender.py 사용 문자열)
+KAKAO_SUCCESS_MARKERS = ("카카오톡 전송 성공", "카카오톡 전송 %s 성공")
+KAKAO_FAIL_MARKERS = ("카카오톡 전송 실패", "카카오톡 전송 중 예외")
+KAKAO_SKIP_MARKERS = ("카톡 발송 skip", "카카오톡 전송 건너뜀")
+
+
+def _scan_recent_kakao_log() -> dict:
+    """
+    logs/briefing.log 마지막 500줄에서 카카오 발송 흔적 스캔.
+
+    Returns:
+      {'success': int, 'fail': int, 'skip': int, 'log_present': bool}
+      - log_present=False면 로그 파일 자체가 없음 (graceful: 검사 skip 권장)
+    """
+    result = {"success": 0, "fail": 0, "skip": 0, "log_present": False}
+    try:
+        if not LOG_PATH.exists():
+            return result
+        result["log_present"] = True
+        # 큰 파일 대비 — 마지막 500줄만 (해당 run의 최근 로그가 끝에 있음)
+        with LOG_PATH.open("r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()[-500:]
+    except Exception:
+        return result
+    for line in lines:
+        if any(m in line for m in KAKAO_SUCCESS_MARKERS):
+            result["success"] += 1
+        elif any(m in line for m in KAKAO_FAIL_MARKERS):
+            result["fail"] += 1
+        elif any(m in line for m in KAKAO_SKIP_MARKERS):
+            result["skip"] += 1
+    return result
 
 
 def check_health(target_date: str | None = None) -> tuple[str, list[tuple[str, str]]]:
-    """기존 함수 — snapshot 기반 검사. issues = [(severity, message)]."""
+    """
+    Post-brief 경량 검사 (외부 API 호출 0 — 안정화 모드).
+
+    검사 항목 (4개):
+      A. 오늘 snapshot 생성 여부
+      B. 추천 종목 수
+      C. 외국인/기관 source 분포
+      D. 카카오 발송 결과 존재 여부 (로그 파일 검사)
+
+    issues = [(severity, message)]
+    """
     target = target_date or today_kst().isoformat()
     issues: list[tuple[str, str]] = []
 
-    # A. snapshot 존재 여부
+    # ── A. 오늘 snapshot 생성 여부 ──
     try:
         with get_conn() as conn:
             sn = conn.execute(
@@ -397,7 +444,7 @@ def check_health(target_date: str | None = None) -> tuple[str, list[tuple[str, s
         issues.append((SEVERITY_CRITICAL, f"{target} snapshot 없음 — 브리핑 미실행"))
         return target, issues
 
-    # B. recommendations 수
+    # ── B. 추천 종목 수 ──
     try:
         with get_conn() as conn:
             actual_recs = conn.execute(
@@ -419,10 +466,8 @@ def check_health(target_date: str | None = None) -> tuple[str, list[tuple[str, s
         return target, issues
 
     candidates = data.get("candidates") or []
-    selected = data.get("selected_recommendations") or []
-    dropped = data.get("dropped_recommendations") or []
 
-    # C. candidates의 source 분포
+    # ── C. 외국인/기관 source 분포 ──
     src_counter: Counter = Counter()
     for c in candidates:
         for s in c.get("sources") or ["volume_rank"]:
@@ -436,35 +481,36 @@ def check_health(target_date: str | None = None) -> tuple[str, list[tuple[str, s
             f"외국인/기관 후보 풀 둘 다 0개 (volume_rank만 {volume_n}개)",
         ))
 
-    # D. dropped 중 거래상태 관련 비율
-    if dropped:
-        total = len(dropped)
-        trade_drops = sum(
-            1 for d in dropped
-            if any(kw in (d.get("drop_reason") or "") for kw in TRADE_STATUS_DROP_KEYWORDS)
-        )
-        ratio = trade_drops / total if total else 0
-        if ratio >= DROP_HIGH_RATIO_THRESHOLD:
+    # ── D. 카카오 발송 결과 존재 여부 (로그 검사, API 호출 X) ──
+    kakao = _scan_recent_kakao_log()
+    if not kakao["log_present"]:
+        # 로그 파일 자체가 없음 — graceful skip (검사 안 함, WARN 안 띄움)
+        pass
+    elif actual_recs > 0:
+        # 추천이 있으면 카톡 발송이 시도되어야 정상
+        if kakao["success"] == 0 and kakao["fail"] == 0:
             issues.append((
                 SEVERITY_WARNING,
-                f"KIS 거래상태 탈락 비율 높음: {trade_drops}/{total} "
-                f"({ratio * 100:.0f}%) — API 응답 이상 의심",
+                f"카카오톡 발송 흔적 없음 (추천 {actual_recs}개인데 success/fail 로그 모두 0)",
             ))
-
-    # E. snapshot 있는데 selected 0
-    if len(selected) == 0 and not any("추천 종목 0개" in msg for _, msg in issues):
-        issues.append((
-            SEVERITY_WARNING,
-            "snapshot 저장됨 + selected_recommendations 0개",
-        ))
+        elif kakao["fail"] > 0 and kakao["success"] == 0:
+            issues.append((
+                SEVERITY_WARNING,
+                f"카카오톡 발송 실패 (fail={kakao['fail']})",
+            ))
+    else:
+        # 추천 0개 → P1으로 카톡 skip이 정상. skip 로그가 없으면 약한 신호.
+        if kakao["skip"] == 0 and kakao["success"] == 0:
+            # 추천 0개 + skip 마커 없음 — 큰 문제는 아님, debug 정보만
+            pass
 
     return target, issues
 
 
 def format_issues(target: str, issues: list[tuple[str, str]]) -> str:
     if not issues:
-        return f"✅ Health check OK ({target})"
-    lines = [f"⚠️ Health check warning ({target})"]
+        return f"✅ Post-Brief Health Check OK ({target})"
+    lines = [f"⚠️ Post-Brief Warning ({target})"]
     for sev, msg in issues:
         prefix = "🔴" if sev == SEVERITY_CRITICAL else "🟡"
         lines.append(f"  {prefix} {msg}")
