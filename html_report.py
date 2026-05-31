@@ -198,10 +198,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   th.align-center, td.align-center {{ text-align: center; }}
   /* 섹터별 성과 표 — 본문 셀 좌우(width) padding 2배 */
   .sector-table tbody td {{ padding: 16px 28px; }}
-  /* 섹터명 앞 Lucide 아이콘 (섹터 컬러로 stroke) */
+  /* 섹터명 셀 — flex로 아이콘+텍스트 안정 정렬 (Lucide CDN 지연/실패시도 겹침 X) */
+  .sector-cell {{
+    display: flex; align-items: center; gap: 10px;
+    line-height: 1.4;
+  }}
+  /* Lucide 아이콘 (섹터 컬러로 stroke) — flex item으로 size 고정 */
   .sector-icon {{
-    display: inline-block; width: 18px; height: 18px;
-    margin-right: 10px; vertical-align: middle;
+    flex-shrink: 0;
+    width: 18px; height: 18px;
     stroke-width: 2;
   }}
   td a {{ color: var(--link); text-decoration: none; }}
@@ -597,7 +602,7 @@ def _sector_table(sectors: list[dict]) -> str:
         )
         rows.append(
             f"<tr>"
-            f'<td>{icon}{s["sector"]}</td>'
+            f'<td><div class="sector-cell">{icon}<span>{s["sector"]}</span></div></td>'
             f'<td class="align-center">{s["total"]}</td>'
             f'<td class="align-right {cls}">{sign}{abs(s["avg_return"]):.2f}%</td>'
             f"</tr>"
