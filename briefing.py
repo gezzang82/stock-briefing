@@ -79,6 +79,82 @@ def _is_force_on_closed_day() -> bool:
         return False
 
 
+def _build_zero_rec_warning_msg(
+    today: str,
+    kospi_str: str, kosdaq_str: str,
+    regime_label: str,
+    tech_candidates: list[dict],
+    cleaned_recs: list[dict],
+    qualified: list[dict],
+    filtered_out: list,
+    all_rejected: list[dict],
+    dashboard_url: str,
+) -> str:
+    """
+    추천 0개 시점의 진단 정보를 담은 경고 카톡 메시지 빌더.
+
+    사용자가 09:05 실행 결과를 카톡으로 바로 알 수 있도록 — 단순 침묵 대신
+    '왜 0개인지'까지 한 눈에 보이게 구성.
+
+    포함 정보 (사용자 명세):
+      - 후보 수 / 검증 통과 수 / 점수 통과 수
+      - 외국인 / 기관 / 거래량 후보 수 (source 분포)
+      - 주요 탈락 사유 상위 N개
+    """
+    from collections import Counter
+    from config import MIN_SCORE_THRESHOLD
+
+    # source 분포 — tech_candidates의 sources 필드 집계
+    src = Counter()
+    for c in tech_candidates:
+        for s in c.get("sources") or ["volume_rank"]:
+            src[s] += 1
+
+    # 탈락 사유 집계 — 검증 탈락(reason) + 점수 미달(filtered_out)
+    drop_reasons: Counter = Counter()
+    for r in all_rejected:
+        drop_reasons[(r.get("reason") or "사유미상").strip()[:25]] += 1
+
+    lines = [
+        f"⚠️ 주식 AI 브리핑 [{today}] — 추천 0개",
+        kospi_str,
+        kosdaq_str,
+    ]
+    if regime_label:
+        lines.append(regime_label)
+    lines.append("")
+
+    # 단계별 통과 수
+    lines.append(
+        f"📊 후보 {len(tech_candidates)} → 검증 {len(cleaned_recs)} → "
+        f"점수≥{MIN_SCORE_THRESHOLD:.0f} {len(qualified)}"
+    )
+
+    # source 분포
+    lines.append(
+        f"🔀 거래량 {src.get('volume_rank', 0)} · "
+        f"외국인 {src.get('foreign_buy_rank', 0)} · "
+        f"기관 {src.get('institution_buy_rank', 0)}"
+    )
+
+    # 주요 탈락 사유 (검증 단계 — 가장 흔한 상위 3개)
+    if drop_reasons:
+        lines.append("")
+        lines.append("❌ 주요 탈락:")
+        for reason, n in drop_reasons.most_common(3):
+            lines.append(f"  · {reason} ({n})")
+
+    # 점수 미달 수
+    if filtered_out:
+        if not drop_reasons:
+            lines.append("")
+        lines.append(f"  · 점수 미달 ({len(filtered_out)})")
+
+    lines.append("")
+    lines.append(f"📱 대시보드: {dashboard_url}")
+    return "\n".join(lines)
+
+
 def _log_kis_status_debug(code: str, name: str, pdata: dict,
                           ok: bool, reason: str) -> None:
     """
@@ -666,8 +742,8 @@ def run_daily_briefing():
             regime_label = REGIME_LABEL.get(regime_info["regime"], ("", ""))[0]
 
         if qualified:
+            # === 케이스 1: 추천 N개 → 기존 추천 카톡 (변경 없음) ===
             # TOP 3 종목 + 핵심 모멘텀(key_catalyst) 한 줄씩
-            # 카카오 메시지 글자수 부풀기 방지: catalyst 60자 초과 시 잘라서 표시
             top_lines = []
             for i, r in enumerate(qualified[:3], 1):
                 catalyst = (r.get("key_catalyst") or "").strip()
@@ -689,11 +765,27 @@ def run_daily_briefing():
             )
             ok = kakao_send(kakao_msg)
             logger.info("카카오톡 전송 %s", "성공" if ok else "실패/건너뜀")
+        elif is_force:
+            # === 케이스 2: 추천 0개 + FORCE 모드 → 카톡 skip (디버그 노이즈 방지) ===
+            # 사용자 명세: "force=true 디버그 실행에서는 기존 정책 유지 가능"
+            logger.info("📭 자격 통과 추천 0개 (FORCE) — 경고 카톡 skip")
         else:
-            # 자격 통과 추천 0개 — 카톡 발송 자체를 skip (P1).
-            # 추천이 없는 날에 알림 보내봐야 노이즈만 됨.
-            # 시스템 헬스체크는 워크플로우 success/failure 알림으로 충분.
-            logger.info("📭 자격 통과 추천 0개 — 카톡 발송 skip")
+            # === 케이스 3: 추천 0개 + 정상 trigger → 경고 카톡 발송 (NEW) ===
+            # 사용자가 09:05 실행 결과를 카톡으로 바로 알 수 있도록 항상 1회 발송.
+            warning_msg = _build_zero_rec_warning_msg(
+                today=today,
+                kospi_str=kospi_str, kosdaq_str=kosdaq_str,
+                regime_label=regime_label,
+                tech_candidates=tech_candidates,
+                cleaned_recs=cleaned_recs,
+                qualified=qualified,
+                filtered_out=filtered_out,
+                all_rejected=all_rejected,
+                dashboard_url=DASHBOARD_URL,
+            )
+            ok = kakao_send(warning_msg)
+            logger.info("⚠️ 추천 0개 경고 카톡 발송 %s",
+                        "성공" if ok else "실패/건너뜀")
     except Exception as e:
         logger.warning("카카오톡 전송 중 예외: %s", e)
 
