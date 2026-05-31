@@ -229,6 +229,19 @@ def _validate_and_clean_recommendations(recs: list[dict]) -> tuple[list[dict], d
         if kis_name != ai_name:
             logger.info("종목명 정정 [%s]: %s → %s", code, ai_name, kis_name)
             r["name"] = kis_name
+
+        # sector 정규화 — AI가 표준 12개로 보내야 하지만 안전망으로 후처리도 적용
+        from sector_utils import normalize_sector, normalize_market
+        r["sector"] = normalize_sector(r.get("sector")) or "기타"
+
+        # market — KIS 응답의 rprs_mrkt_kor_name 우선, 없으면 AI 보낸 값 fallback
+        kis_market_raw = pdata.get("rprs_mrkt_kor_name") if isinstance(pdata, dict) else None
+        if kis_market_raw:
+            r["market"] = normalize_market(kis_market_raw)
+        else:
+            # AI가 보낸 market 값 정규화 (KIS 응답 못 받은 경우)
+            r["market"] = normalize_market(r.get("market"))
+
         cleaned.append(r)
 
     logger.info(
@@ -310,6 +323,7 @@ def _save_decision_snapshot(
             "code": r.get("code"),
             "name": r.get("name"),
             "sector": r.get("sector"),
+            "market": r.get("market"),    # KOSPI / KOSDAQ
             "tech_score": r.get("tech_score"),
             "target_return": r.get("target_return"),
             "risk_level": r.get("risk_level"),

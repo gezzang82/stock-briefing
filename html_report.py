@@ -225,11 +225,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-bottom: 1px dashed transparent;
   }}
   .stock-link:hover .stock-name {{ color: var(--link); }}
-  .sector-tag {{
+  .sector-tag, .market-tag {{
     display: inline-block; font-size: 0.745rem;
     padding: 1px 7px; border-radius: 6px;
     line-height: 1.4; font-weight: 700;
     letter-spacing: -0.01em;
+  }}
+  .tag-row {{
+    display: flex; flex-wrap: wrap; gap: 4px;
   }}
   .stock-logo, .stock-logo-fb {{
     display: inline-block; width: 32px; height: 32px;
@@ -477,8 +480,7 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
 
 def _sector_tag(sector: str | None) -> str:
     """진한 글자색 + 같은 색의 연한 배경. 정규화 후 표시."""
-    # raw sector ('제약 바이오', 'IT/통신장비' 등) → 정규화 ('제약/바이오', 'IT')
-    # 종목 리스트와 섹터 테이블 모두 같은 표기로 일관성 유지
+    # raw sector ('제약 바이오', 'IT/통신장비' 등) → 정규화 (12개 표준 중 하나)
     from sector_utils import normalize_sector
     sector = normalize_sector(sector)
     if not sector or sector == "-":
@@ -486,6 +488,26 @@ def _sector_tag(sector: str | None) -> str:
     color = _sector_color(sector)
     bg = _hex_to_rgba(color, 0.13)
     return f'<span class="sector-tag" style="color:{color};background:{bg}">{sector}</span>'
+
+
+# 시장별 컬러 — 코스피(파랑) / 코스닥(주황) / 기타(회색)
+_MARKET_COLORS = {
+    "KOSPI": "#2563eb",
+    "KOSDAQ": "#ea580c",
+}
+
+
+def _market_tag(market: str | None) -> str:
+    """시장(KOSPI/KOSDAQ) 배지 — sector tag와 같은 형태, 다른 색상 팔레트."""
+    from sector_utils import normalize_market
+    if not market:
+        return ""
+    m = normalize_market(market)
+    if m == "기타" or not m:
+        return ""
+    color = _MARKET_COLORS.get(m, "#64748b")
+    bg = _hex_to_rgba(color, 0.13)
+    return f'<span class="market-tag" style="color:{color};background:{bg}">{m}</span>'
 
 
 def _logo_html(code: str, name: str) -> str:
@@ -528,6 +550,7 @@ def _stock_table(items: list[dict], title: str,
             date_short = it["rec_date"]
         logo = _logo_html(it["stock_code"], it["stock_name"])
         sector_tag = _sector_tag(it.get("sector"))
+        market_tag = _market_tag(it.get("market"))
         # 변동폭 2줄
         mfe = it.get("mfe_pct")
         mae = it.get("mae_pct")
@@ -546,7 +569,7 @@ def _stock_table(items: list[dict], title: str,
             f'<div class="stock-row">'
             f"{logo}"
             f'<div class="stock-info">'
-            f"<div>{sector_tag}</div>"
+            f'<div class="tag-row">{market_tag}{sector_tag}</div>'
             f'<span class="stock-name">{it["stock_name"]}</span>'
             f"</div>"
             f"</div>"
