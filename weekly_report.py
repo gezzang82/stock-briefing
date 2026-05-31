@@ -50,22 +50,82 @@ def fetch_period_items(days: int = 7) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# 섹터명 정규화 — AI가 매번 다른 표기로 분류해 같은 섹터가 여러 행으로 나뉘는 문제 대응.
+# (예: "제약 바이오" + "제약/바이오" → "제약/바이오" 1행으로 합산)
+SECTOR_ALIASES = {
+    # 제약/바이오 계열 통합
+    "제약 바이오": "제약/바이오",
+    "바이오/제약": "제약/바이오",
+    "바이오": "제약/바이오",
+    "헬스케어": "제약/바이오",
+    "의약품": "제약/바이오",
+    # IT 계열 통합 (사용자 요구사항)
+    "IT": "IT",
+    "IT/서비스": "IT",
+    "IT/통신장비": "IT",
+    "통신장비": "IT",
+    "통신": "IT",
+    "소프트웨어": "IT",
+    "소프트웨어/IT": "IT",
+    "인터넷": "IT",
+    # 전자/반도체는 별도 유지 (산업 분류상 다른 카테고리)
+    "전자": "전자",
+    "반도체": "반도체",
+    # AI는 별도 유지 (테마성 섹터)
+    "AI": "AI",
+}
+
+
+def _normalize_sector(s: str | None) -> str | None:
+    """섹터명 정규화 — alias 매핑. 없는 키는 trim만 적용해 그대로 반환."""
+    if not s:
+        return None
+    key = s.strip()
+    return SECTOR_ALIASES.get(key, key)
+
+
 def fetch_sector_performance(days: int = 30) -> list[dict]:
+    """
+    섹터별 평균 수익률 (정규화 후 합산).
+
+    SQL 단에서 GROUP BY를 못 함 — alias 매핑이 Python 측 정의라.
+    raw rows 가져온 뒤 normalized sector로 재집계.
+    """
     today = today_kst()
     start = (today - timedelta(days=days)).isoformat()
     with get_conn() as conn:
         rows = conn.execute(
-            """SELECT r.sector, COUNT(*) AS total,
-                      AVG((SELECT pt.return_pct FROM price_tracking pt
-                           WHERE pt.recommendation_id = r.id
-                           ORDER BY pt.track_date DESC LIMIT 1)) AS avg_return
+            """SELECT r.sector AS raw_sector,
+                      (SELECT pt.return_pct FROM price_tracking pt
+                       WHERE pt.recommendation_id = r.id
+                       ORDER BY pt.track_date DESC LIMIT 1) AS ret
                FROM recommendations r
-               WHERE r.rec_date >= ? AND r.sector IS NOT NULL AND r.sector != ''
-               GROUP BY r.sector HAVING avg_return IS NOT NULL
-               ORDER BY avg_return DESC""",
+               WHERE r.rec_date >= ?
+                 AND r.sector IS NOT NULL AND r.sector != ''""",
             (start,),
         ).fetchall()
-    return [dict(r) for r in rows]
+
+    # Python에서 정규화 + GROUP BY 재집계
+    buckets: dict[str, list[float]] = {}
+    for r in rows:
+        if r["ret"] is None:
+            continue
+        norm = _normalize_sector(r["raw_sector"])
+        if not norm:
+            continue
+        buckets.setdefault(norm, []).append(r["ret"])
+
+    result = [
+        {
+            "sector": norm,
+            "total": len(returns),
+            "avg_return": sum(returns) / len(returns),
+        }
+        for norm, returns in buckets.items()
+    ]
+    # 평균 수익률 내림차순
+    result.sort(key=lambda x: x["avg_return"], reverse=True)
+    return result
 
 
 # ============== 카카오톡 메시지 빌더 ==============
