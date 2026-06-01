@@ -808,7 +808,7 @@ def generate_html_report(
                 chart_datas.append(chart)
 
     if week_items:
-        body_parts.append(_stock_table(week_items, "이번 주 추천 종목 성과"))
+        body_parts.append(_stock_table(week_items, "최근 14일 추천 종목 성과"))
 
     if sectors:
         body_parts.append(_sector_table(sectors))
@@ -898,7 +898,7 @@ def generate_demo_page(output_path: str | Path):
         body_parts.append(html)
         if chart:
             chart_datas.append(chart)
-    body_parts.append(_stock_table(items, "이번 주 추천 종목 성과"))
+    body_parts.append(_stock_table(items, "최근 14일 추천 종목 성과"))
     body_parts.append(_sector_table(sectors))
 
     # 데모임을 알리는 배너 추가

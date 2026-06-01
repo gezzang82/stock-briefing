@@ -734,7 +734,7 @@ def run_daily_briefing():
         from weekly_report import fetch_period_items, fetch_sector_performance, HTML_OUTPUT
         generate_html_report(
             get_all_monthly_stats(months_limit=12),
-            fetch_period_items(days=7),
+            fetch_period_items(days=14),  # TRACKING_DAYS와 일치 — 추적 만기까지 모든 종목 표시
             fetch_sector_performance(days=30),
             HTML_OUTPUT,
         )

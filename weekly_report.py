@@ -31,7 +31,7 @@ COLOR_RED = 0xE74C3C
 
 # ============== 데이터 ==============
 
-def fetch_period_items(days: int = 7) -> list[dict]:
+def fetch_period_items(days: int = 14) -> list[dict]:
     today = today_kst()
     start = (today - timedelta(days=days)).isoformat()
     with get_conn() as conn:
@@ -150,7 +150,7 @@ def run_weekly_report():
         prev_month_stats = None
 
     monthly_all = get_all_monthly_stats(months_limit=12)
-    week_items = fetch_period_items(days=7)
+    week_items = fetch_period_items(days=14)  # TRACKING_DAYS와 일치 — 추적 만기까지 모든 종목 표시
     sectors = fetch_sector_performance(days=30)
 
     logger.info(
