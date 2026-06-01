@@ -3,16 +3,24 @@
 GitHub Actions 기본 `schedule`이 ~14시간씩 지연/누락되는 문제를 회피하기 위해
 [cron-job.org](https://cron-job.org/)를 메인 트리거로 사용한다.
 
-평일 **09:05 KST** (장 개장 후 5분)에 cron-job.org가 GitHub API를 호출 → `workflow_dispatch` 이벤트 발생 → `briefing.yml` 즉시 실행.
+평일 **16:00 KST** (장 마감 + 30분, EOD)에 cron-job.org가 GitHub API를 호출 → `workflow_dispatch` 이벤트 발생 → `briefing.yml` 즉시 실행.
 
-GitHub Actions `schedule`은 백업으로 KST 10:05에만 유지 (멱등성 가드가 중복 차단).
+GitHub Actions `schedule`은 백업으로 KST 16:30에만 유지 (멱등성 가드가 중복 차단).
 
-### 왜 09:05인가? (06:30이 아니라)
+### 왜 16:00 KST (EOD)?
 
-KIS Open API의 `inquire-price`는 의도된 사용 시점이 **장 운영 시간(09:00~15:30 KST)** 이라,
-그 외 시간에 호출하면 우량주에도 매매중단/거래정지 status code(54, 55, 57)를 비정상 반환함.
+| 측면 | 이유 |
+|---|---|
+| **KIS 데이터** | 하루 거래량/외국인기관 매매 완전 확정 — 점수 시그널 최고 품질 |
+| **시간외 종가 반영** | 15:30~16:00 시간외 종가 데이터 추가 정보 활용 |
+| **사용자 편의** | 다음 영업일 09:00 시가까지 17시간 → 퇴근 후 분석 + 매수 준비 여유 |
+| **스윙 트레이딩 적합** | TRACKING_DAYS=14 보유 전략에 갭 위험 < 데이터 품질 |
 
-→ 장 개장(09:00) 후 5분 = 시가 형성 + 첫 거래량 반영 + 모멘텀 시그널 가장 강한 시간대.
+### 시간 변경 이력
+
+- 2026-05-26 ~ 05-27: 06:30 KST (장 시작 전, KIS 비정상 응답으로 추천 0개)
+- 2026-05-28 ~ 06-01: 09:05 KST (장 개장 후, 거래량 데이터 누적 부족으로 후보 2~3개)
+- **2026-06-01 ~ : 16:00 KST EOD** (장 마감 후, 데이터 완전 누적)
 
 ---
 
@@ -47,7 +55,7 @@ KIS Open API의 `inquire-price`는 의도된 사용 시점이 **장 운영 시�
 
 | 필드 | 값 |
 |---|---|
-| Title | `Stock Briefing Daily 09:05 KST` |
+| Title | `Stock Briefing Daily 16:00 KST (EOD)` |
 | Address (URL) | `https://api.github.com/repos/gezzang82/stock-briefing/actions/workflows/briefing.yml/dispatches` |
 | Enabled | ✅ |
 
@@ -59,10 +67,10 @@ KIS Open API의 `inquire-price`는 의도된 사용 시점이 **장 운영 시�
 | Days of month | every |
 | Months | every |
 | Days of week | Mon, Tue, Wed, Thu, Fri (월~금만 체크) |
-| Hours | `9` |
-| Minutes | `5` |
+| Hours | `16` |
+| Minutes | `0` |
 
-cron 표현식으로 입력 가능하면: `5 9 * * 1-5` (Asia/Seoul 기준)
+cron 표현식으로 입력 가능하면: `0 16 * * 1-5` (Asia/Seoul 기준)
 
 #### Advanced 탭
 

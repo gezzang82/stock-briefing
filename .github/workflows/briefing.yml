@@ -2,15 +2,16 @@ name: 주식 브리핑
 
 on:
   schedule:
-    # 메인 트리거는 외부 cron-job.org가 workflow_dispatch로 호출 (KST 09:05).
-    # 여기는 백업 1개만 — cron-job.org가 안 떴을 때 fallback.
+    # 메인 트리거는 외부 cron-job.org가 workflow_dispatch로 호출 (KST 16:00 EOD).
+    # 여기는 백업 1개만 — cron-job.org가 안 떴을 때 fallback (16:30).
     # 멱등성 가드(snapshot_logs)가 중복 차단.
     #
-    # KST 09:05 (장 개장 후 5분)에 맞춘 이유:
-    #   - KIS API의 inquire-price가 장 운영 시간(09:00~15:30)에 정상 응답.
-    #     그 외 시간엔 status code(매매중단/거래정지)가 비정상 반환됨.
-    #   - 09:05는 시가 형성 + 첫 거래량 반영 + 가장 강한 모멘텀 시그널 시간대.
-    - cron: '5 1 * * 1-5'  # 백업 — UTC 01:05 = KST 월~금 10:05
+    # KST 16:00 (장 마감 + 30분, EOD)에 맞춘 이유:
+    #   - 하루 거래량/외국인기관 매매 데이터가 모두 확정 → 점수 시그널 최고 품질
+    #   - 시간외 종가(15:30~16:00) 완료 후 → KIS API 응답 가장 풍부
+    #   - 다음 영업일 09:00 시가까지 17시간 → 사용자 분석/매수 준비 여유
+    #   - 스윙 트레이딩 (14일 보유) 전략에 본질적으로 적합
+    - cron: '30 7 * * 1-5'  # 백업 — UTC 07:30 = KST 월~금 16:30 (메인의 30분 후)
   workflow_dispatch:
     inputs:
       force:

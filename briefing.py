@@ -116,7 +116,7 @@ def _build_zero_rec_warning_msg(
         drop_reasons[(r.get("reason") or "사유미상").strip()[:25]] += 1
 
     lines = [
-        f"⚠️ 주식 AI 브리핑 [{today}] — 추천 0개",
+        f"⚠️ 주식 AI 추천 [{today} EOD] — 다음 영업일 매수 후보 0개",
         kospi_str,
         kosdaq_str,
     ]
@@ -742,7 +742,7 @@ def run_daily_briefing():
             regime_label = REGIME_LABEL.get(regime_info["regime"], ("", ""))[0]
 
         if qualified:
-            # === 케이스 1: 추천 N개 → 기존 추천 카톡 (변경 없음) ===
+            # === 케이스 1: 추천 N개 → EOD 기반 다음 영업일 매수 후보 ===
             # TOP 3 종목 + 핵심 모멘텀(key_catalyst) 한 줄씩
             top_lines = []
             for i, r in enumerate(qualified[:3], 1):
@@ -755,8 +755,10 @@ def run_daily_briefing():
                     top_lines.append(f"{i}. {r['name']}")
             top_block = "\n".join(top_lines)
 
+            # EOD 16:00 KST 운영 — 오늘 종가 데이터로 다음 영업일 매수 후보 산출
             kakao_msg = (
-                f"📈 주식 AI 브리핑 [{today}]\n"
+                f"📈 주식 AI 추천 [{today} EOD]\n"
+                f"➡️ 다음 영업일 매수 후보\n"
                 f"{kospi_str}\n{kosdaq_str}\n"
                 f"{regime_label}\n\n"
                 f"📊 추천 {len(qualified)}개\n"

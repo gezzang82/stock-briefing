@@ -2,7 +2,7 @@
 
 ## 하네스: 주식 브리핑
 
-**목표:** 매일 KST 09:05 자동 실행되는 AI 주식 브리핑 파이프라인을 유지·개선·디버깅한다.
+**목표:** 매 평일 KST 16:00 EOD(장 마감 후) 자동 실행되는 AI 주식 브리핑 파이프라인을 유지·개선·디버깅한다.
 
 **트리거:** 브리핑 시스템 관련 모든 작업 요청 시 `briefing-system` 스킬을 사용하라.
 "브리핑", "추천", "적중률", "KIS", "카카오", "스크리닝", "레짐", "뉴스 수집", "대시보드",
@@ -22,3 +22,4 @@
 | 2026-05-28 | 트리거 시각 06:30 → 09:05 KST (장 개장 후 5분) | cron-job.org, briefing.yml | KIS API의 inquire-price는 장 운영시간(09:00~15:30)에 정상 응답 |
 | 2026-05-28 | KIS `_BAD_STATUS_CODES` {51-59} → {51,52,53} | briefing.py:_check_tradeable | stat 54~59가 거래정지가 아니라 시간/가격 상태 코드임을 raw 로깅으로 확인 |
 | 2026-05-28 | KIS raw 응답 디버그 로깅 추가 | briefing.py:_log_kis_status_debug | 거래상태 검증 false 시 stat/temp/sltr/warn 필드 + _check_tradeable 결과 WARNING 출력 |
+| 2026-06-01 | 트리거 시각 09:05 → 16:00 KST (EOD) | cron-job.org, briefing.yml, config.py, briefing.py 카톡 메시지 | 09:05는 장 개장 직후라 KIS 거래량/외국인기관 데이터 누적 전 → 후보 2개 + 0개 시그널. EOD는 하루치 데이터 확정으로 점수 시그널 최고 품질. 스윙 트레이딩 전략에 본질적으로 적합. |

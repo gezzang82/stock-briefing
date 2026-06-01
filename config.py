@@ -37,9 +37,9 @@ KAKAO_TOKEN_PATH = BASE_DIR / ".kakao_tokens"
 LOG_DIR = BASE_DIR / "logs"
 
 # 로컬 스케줄러(main.py --scheduler) 시각 — GitHub Actions/cron-job.org이 메인이라 dead code에 가까움.
-# 일관성 위해 cron-job.org 메인 트리거 시각(KST 09:05)과 동기화 유지.
-BRIEFING_HOUR = 9
-BRIEFING_MINUTE = 5
+# 일관성 위해 cron-job.org 메인 트리거 시각(KST 16:00 EOD)과 동기화 유지.
+BRIEFING_HOUR = 16
+BRIEFING_MINUTE = 0
 TOP_N_STOCKS = 10           # 최대 추천 종목 수 (실제는 score 필터로 가변)
 TRACKING_DAYS = 14          # 2주 후 평가
 HIT_THRESHOLD_PCT = 5.0     # 단순 적중 기준 (티어 +5%~+10% 경계)
