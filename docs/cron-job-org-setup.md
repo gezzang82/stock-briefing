@@ -3,11 +3,11 @@
 GitHub Actions 기본 `schedule`이 ~14시간씩 지연/누락되는 문제를 회피하기 위해
 [cron-job.org](https://cron-job.org/)를 메인 트리거로 사용한다.
 
-평일 **16:00 KST** (장 마감 + 30분, EOD)에 cron-job.org가 GitHub API를 호출 → `workflow_dispatch` 이벤트 발생 → `briefing.yml` 즉시 실행.
+평일 **18:00 KST** (시간외 단일가 종료 직후, EOD)에 cron-job.org가 GitHub API를 호출 → `workflow_dispatch` 이벤트 발생 → `briefing.yml` 즉시 실행.
 
-GitHub Actions `schedule`은 백업으로 KST 16:30에만 유지 (멱등성 가드가 중복 차단).
+GitHub Actions `schedule`은 백업으로 KST 18:30에만 유지 (멱등성 가드가 중복 차단).
 
-### 왜 16:00 KST (EOD)?
+### 왜 18:00 KST (EOD)?
 
 | 측면 | 이유 |
 |---|---|
@@ -20,7 +20,8 @@ GitHub Actions `schedule`은 백업으로 KST 16:30에만 유지 (멱등성 가�
 
 - 2026-05-26 ~ 05-27: 06:30 KST (장 시작 전, KIS 비정상 응답으로 추천 0개)
 - 2026-05-28 ~ 06-01: 09:05 KST (장 개장 후, 거래량 데이터 누적 부족으로 후보 2~3개)
-- **2026-06-01 ~ : 16:00 KST EOD** (장 마감 후, 데이터 완전 누적)
+- 2026-06-01 (오전): 16:00 KST EOD 시도 → 사용자 편의 위해 18:00으로 재조정
+- **2026-06-01 ~ : 18:00 KST EOD** (시간외 단일가 종료 직후, 데이터 최완전)
 
 ---
 
@@ -55,7 +56,7 @@ GitHub Actions `schedule`은 백업으로 KST 16:30에만 유지 (멱등성 가�
 
 | 필드 | 값 |
 |---|---|
-| Title | `Stock Briefing Daily 16:00 KST (EOD)` |
+| Title | `Stock Briefing Daily 18:00 KST (EOD)` |
 | Address (URL) | `https://api.github.com/repos/gezzang82/stock-briefing/actions/workflows/briefing.yml/dispatches` |
 | Enabled | ✅ |
 
@@ -67,10 +68,10 @@ GitHub Actions `schedule`은 백업으로 KST 16:30에만 유지 (멱등성 가�
 | Days of month | every |
 | Months | every |
 | Days of week | Mon, Tue, Wed, Thu, Fri (월~금만 체크) |
-| Hours | `16` |
+| Hours | `18` |
 | Minutes | `0` |
 
-cron 표현식으로 입력 가능하면: `0 16 * * 1-5` (Asia/Seoul 기준)
+cron 표현식으로 입력 가능하면: `0 18 * * 1-5` (Asia/Seoul 기준)
 
 #### Advanced 탭
 
