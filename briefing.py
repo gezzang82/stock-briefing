@@ -524,6 +524,16 @@ def run_daily_briefing():
         logger.warning("⚠️ FORCE 실행 — 멱등성 체크 무시")
     elif has_briefing_run_for_date(today):
         logger.info("⏭️ 오늘 브리핑 이미 실행됨 (snapshot 존재) — 중복 실행 skip")
+        # health_check이 같은 데이터로 또 경고 카톡 보내지 않도록 marker 생성
+        # (같은 GitHub Actions run 내에서만 의미 있음 — runner filesystem 공유)
+        try:
+            import os
+            from pathlib import Path
+            marker = Path(os.environ.get("BRIEFING_SKIP_MARKER", "/tmp/briefing_skipped_today"))
+            marker.write_text(today)
+        except Exception as e:
+            # marker 실패해도 진행 — 사이드 이펙트일 뿐
+            logger.debug("skip marker 생성 실패 (무시): %s", e)
         return
     else:
         logger.info("오늘 브리핑 미실행 — 정상 진행")

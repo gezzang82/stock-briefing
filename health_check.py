@@ -532,6 +532,18 @@ def run_post_brief_diagnostic() -> int:
     skip_on_force = "--skip-on-force" in sys.argv
     is_force = os.environ.get("BRIEFING_FORCE_FLAG", "").lower() == "true"
 
+    # brief가 멱등성 가드로 skip된 경우 — 같은 데이터로 또 진단 + 카톡 보내면 노이즈.
+    # briefing.py가 marker 파일 생성 → 여기서 읽어 동시 skip.
+    skip_marker = Path(
+        os.environ.get("BRIEFING_SKIP_MARKER", "/tmp/briefing_skipped_today")
+    )
+    if skip_marker.exists():
+        logger.info(
+            "⏭️ brief가 멱등성으로 skip됨 (marker=%s) — health_check도 skip (중복 카톡 방지)",
+            skip_marker,
+        )
+        return 0
+
     target, issues = check_health()
     output = format_issues(target, issues)
     print(output)
