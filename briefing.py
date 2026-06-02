@@ -79,6 +79,77 @@ def _is_force_on_closed_day() -> bool:
         return False
 
 
+def _log_observation_report(
+    today: str,
+    tech_candidates: list[dict],
+    cleaned_recs: list[dict],
+    qualified: list[dict],
+    filtered_out: list,
+    all_rejected: list[dict],
+) -> None:
+    """
+    매 실행 후 관측 보고서를 INFO 로그로 출력.
+
+    목적: 후보 추출/검증/점수 통과 추이를 매일 추적해 BLNG 변경 등
+          전략 변경 결정을 단일 데이터 포인트가 아니라 누적 관측 기반으로 함.
+
+    출력 위치:
+      - stdout (GitHub Actions 로그에서 매번 확인 가능)
+      - logs/briefing.log (누적)
+
+    별도 누적 분석은 report_observations.py 참조.
+    """
+    from collections import Counter
+    from config import MIN_SCORE_THRESHOLD
+
+    # source 분포
+    src = Counter()
+    for c in tech_candidates:
+        for s in c.get("sources") or ["volume_rank"]:
+            src[s] += 1
+    volume_n = src.get("volume_rank", 0)
+    foreign_n = src.get("foreign_buy_rank", 0)
+    instit_n = src.get("institution_buy_rank", 0)
+
+    # 탈락 사유 집계
+    drop_reasons = Counter(
+        (r.get("reason") or "사유미상").strip()[:25] for r in all_rejected
+    )
+
+    # CASE A/B 판정 — 단일 실행이라 단순 경고만 (누적 판단은 별도 스크립트)
+    if volume_n == 0:
+        verdict = "⚠️  거래량 후보 0개 — 누적 관측 필요 (CASE A 후보)"
+    elif volume_n <= 2:
+        verdict = "⚠️  거래량 후보 ≤2개 — CASE A 카운트"
+    else:
+        verdict = "✅ 정상 범위 (BLNG 변경 불필요)"
+
+    lines = [
+        "",
+        "=" * 60,
+        f"  [관측 보고서 {today} EOD]",
+        "=" * 60,
+        f"  거래량 후보: {volume_n}",
+        f"  외국인 후보: {foreign_n}",
+        f"  기관 후보:   {instit_n}",
+        f"  검증 통과:   {len(cleaned_recs)}",
+        f"  점수 통과:   {len(qualified)} (기준 ≥ {MIN_SCORE_THRESHOLD:.0f})",
+        f"  최종 추천:   {len(qualified)}",
+    ]
+    if drop_reasons:
+        lines.append("")
+        lines.append("  주요 탈락:")
+        for reason, n in drop_reasons.most_common(3):
+            lines.append(f"    · {reason} ({n})")
+    if filtered_out:
+        lines.append(f"    · 점수 미달 ({len(filtered_out)})")
+    lines.append("")
+    lines.append(f"  판정: {verdict}")
+    lines.append("=" * 60)
+
+    logger.info("\n".join(lines))
+
+
 def _write_kakao_sent_marker(today_str: str) -> None:
     """
     brief가 카톡 발송 성공 시 marker 파일 생성 — health_check 중복 발송 방지.
@@ -822,6 +893,15 @@ def run_daily_briefing():
                 _write_kakao_sent_marker(today)
     except Exception as e:
         logger.warning("카카오톡 전송 중 예외: %s", e)
+
+    # 관측 보고서 — BLNG 변경 등 전략 결정용 누적 데이터 축적
+    try:
+        _log_observation_report(
+            today, tech_candidates, cleaned_recs, qualified,
+            filtered_out, all_rejected,
+        )
+    except Exception as e:
+        logger.debug("관측 보고서 출력 실패 (무시): %s", e)
 
     logger.info("=== 브리핑 완료 ===")
     return analysis
