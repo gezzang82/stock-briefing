@@ -79,6 +79,24 @@ def _is_force_on_closed_day() -> bool:
         return False
 
 
+def _write_kakao_sent_marker(today_str: str) -> None:
+    """
+    brief가 카톡 발송 성공 시 marker 파일 생성 — health_check 중복 발송 방지.
+
+    같은 GitHub Actions run 내에서 brief → health_check 순서로 실행되므로,
+    runner filesystem의 /tmp에 marker 두면 health_check이 보고 skip 가능.
+    """
+    try:
+        import os
+        from pathlib import Path
+        marker = Path(
+            os.environ.get("BRIEFING_KAKAO_MARKER", "/tmp/briefing_kakao_sent_today")
+        )
+        marker.write_text(today_str)
+    except Exception as e:
+        logger.debug("kakao sent marker 생성 실패 (무시): %s", e)
+
+
 def _build_zero_rec_warning_msg(
     today: str,
     kospi_str: str, kosdaq_str: str,
@@ -777,6 +795,8 @@ def run_daily_briefing():
             )
             ok = kakao_send(kakao_msg)
             logger.info("카카오톡 전송 %s", "성공" if ok else "실패/건너뜀")
+            if ok:
+                _write_kakao_sent_marker(today)
         elif is_force:
             # === 케이스 2: 추천 0개 + FORCE 모드 → 카톡 skip (디버그 노이즈 방지) ===
             # 사용자 명세: "force=true 디버그 실행에서는 기존 정책 유지 가능"
@@ -798,6 +818,8 @@ def run_daily_briefing():
             ok = kakao_send(warning_msg)
             logger.info("⚠️ 추천 0개 경고 카톡 발송 %s",
                         "성공" if ok else "실패/건너뜀")
+            if ok:
+                _write_kakao_sent_marker(today)
     except Exception as e:
         logger.warning("카카오톡 전송 중 예외: %s", e)
 

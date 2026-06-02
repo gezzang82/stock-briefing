@@ -532,8 +532,8 @@ def run_post_brief_diagnostic() -> int:
     skip_on_force = "--skip-on-force" in sys.argv
     is_force = os.environ.get("BRIEFING_FORCE_FLAG", "").lower() == "true"
 
-    # brief가 멱등성 가드로 skip된 경우 — 같은 데이터로 또 진단 + 카톡 보내면 노이즈.
-    # briefing.py가 marker 파일 생성 → 여기서 읽어 동시 skip.
+    # ── 가드 1: brief가 멱등성으로 skip된 경우 ──
+    # 같은 데이터로 또 진단 + 카톡 보내면 노이즈.
     skip_marker = Path(
         os.environ.get("BRIEFING_SKIP_MARKER", "/tmp/briefing_skipped_today")
     )
@@ -541,6 +541,19 @@ def run_post_brief_diagnostic() -> int:
         logger.info(
             "⏭️ brief가 멱등성으로 skip됨 (marker=%s) — health_check도 skip (중복 카톡 방지)",
             skip_marker,
+        )
+        return 0
+
+    # ── 가드 2: brief가 이미 카톡 발송 성공한 경우 ──
+    # 정상 trigger에서 brief가 추천 카톡(N개) 또는 경고 카톡(0개) 발송 후
+    # 같은 정보로 health_check이 또 카톡 보내면 사용자 노이즈 (6/2 18:00 사고).
+    kakao_marker = Path(
+        os.environ.get("BRIEFING_KAKAO_MARKER", "/tmp/briefing_kakao_sent_today")
+    )
+    if kakao_marker.exists():
+        logger.info(
+            "⏭️ brief가 이미 카톡 발송함 (marker=%s) — health_check도 skip (중복 방지)",
+            kakao_marker,
         )
         return 0
 
