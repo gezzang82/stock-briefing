@@ -1,0 +1,40 @@
+name: '[debug] KIS volume-rank API'
+
+# ⚠️ 일회성 디버그 — 결과 확인 후 제거.
+# 2026-06-02 18:00 EOD에서 거래량 후보 0개 사고 원인 분석용.
+#
+# 금지:
+#   - DB 커밋/푸시 X (contents: read)
+#   - 카톡 발송 X (KAKAO secret 미주입)
+#   - briefing/추천 로직 호출 X
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+
+      - name: 디버그 스크립트 실행
+        env:
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+          KIS_ACCOUNT_NO: ${{ secrets.KIS_ACCOUNT_NO }}
+          KIS_IS_VIRTUAL: 'false'
+        run: python debug_volume_rank.py
