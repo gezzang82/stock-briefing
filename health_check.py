@@ -417,7 +417,7 @@ def check_health(target_date: str | None = None) -> tuple[str, list[tuple[str, s
     Post-brief 경량 검사 (외부 API 호출 0 — 안정화 모드).
 
     검사 항목 (4개):
-      A. 오늘 snapshot 생성 여부
+      A. 오늘 snapshot 생성 여부 (휴장일이면 skip)
       B. 추천 종목 수
       C. 외국인/기관 source 분포
       D. 카카오 발송 결과 존재 여부 (로그 파일 검사)
@@ -426,6 +426,21 @@ def check_health(target_date: str | None = None) -> tuple[str, list[tuple[str, s
     """
     target = target_date or today_kst().isoformat()
     issues: list[tuple[str, str]] = []
+
+    # ── 휴장일 가드 (외부 API 호출 X — market_calendar는 holidays 패키지 read-only) ──
+    # brief가 휴장일이라 skip되어 snapshot 없는 건 정상 동작.
+    # health_check이 "snapshot 없음 critical"로 잘못된 경고 보내는 사고 방지 (2026-06-03 사례).
+    try:
+        from datetime import date as _date
+        from market_calendar import is_krx_closed
+        target_d = _date.fromisoformat(target)
+        closed, reason = is_krx_closed(target_d)
+        if closed:
+            # 휴장일 — 진단 자체를 skip (정상)
+            logger.info("⏭️ %s 휴장일 (%s) — health_check skip (정상)", target, reason)
+            return target, []
+    except Exception as e:
+        logger.debug("휴장일 가드 실패 (무시): %s", e)
 
     # ── A. 오늘 snapshot 생성 여부 ──
     try:
