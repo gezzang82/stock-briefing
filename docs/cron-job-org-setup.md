@@ -1,11 +1,13 @@
 # cron-job.org 메인 트리거 설정 가이드
 
 GitHub Actions 기본 `schedule`이 ~14시간씩 지연/누락되는 문제를 회피하기 위해
-[cron-job.org](https://cron-job.org/)를 메인 트리거로 사용한다.
+[cron-job.org](https://cron-job.org/)를 단독 트리거로 사용한다.
 
 평일 **18:00 KST** (시간외 단일가 종료 직후, EOD)에 cron-job.org가 GitHub API를 호출 → `workflow_dispatch` 이벤트 발생 → `briefing.yml` 즉시 실행.
 
-GitHub Actions `schedule`은 백업으로 KST 18:30에만 유지 (멱등성 가드가 중복 차단).
+> **2026-06-04 변경**: GitHub Actions `schedule` 백업을 제거했다. 5/5건 모두 11~14시간 지연 발화 → 다음날 새벽 backup이 cron-job.org 18:00 메인보다 먼저 snapshot을 선점해 메인을 무력화하는 사고가 반복됨 (백업이 메인을 무력화). cron-job.org는 4일 100% 정시 발화 검증 후 단독 운영.
+>
+> cron-job.org 자체 장애 시 fallback: failure notification 이메일을 받은 사용자가 GitHub Actions UI에서 `workflow_dispatch`를 수동 실행.
 
 ### 왜 18:00 KST (EOD)?
 
@@ -22,6 +24,7 @@ GitHub Actions `schedule`은 백업으로 KST 18:30에만 유지 (멱등성 가�
 - 2026-05-28 ~ 06-01: 09:05 KST (장 개장 후, 거래량 데이터 누적 부족으로 후보 2~3개)
 - 2026-06-01 (오전): 16:00 KST EOD 시도 → 사용자 편의 위해 18:00으로 재조정
 - **2026-06-01 ~ : 18:00 KST EOD** (시간외 단일가 종료 직후, 데이터 최완전)
+- **2026-06-04 ~ : cron-job.org 단독 운영** (GitHub Actions `schedule` 백업 제거)
 
 ---
 
@@ -126,8 +129,7 @@ cron 표현식으로 입력 가능하면: `0 18 * * 1-5` (Asia/Seoul 기준)
 
 ## 4. 중복 실행 방지 — 멱등성 가드
 
-같은 날 cron-job.org(09:05)와 GitHub 백업 schedule(10:05) 둘 다 트리거되어도
-실제 브리핑은 1회만 실행됨.
+cron-job.org 단독 운영이지만 멱등성 가드는 유지한다 (수동 `workflow_dispatch` 재실행, cron-job.org 재시도 등으로 같은 날 2회 트리거되어도 실제 브리핑은 1회만 실행).
 
 ### 가드 흐름
 
@@ -153,7 +155,7 @@ snapshot_logs 테이블에 같은 날짜 row 있나?
 ## 5. 실제 운영 흐름
 
 ```
-09:05 KST  cron-job.org → POST GitHub API → workflow_dispatch
+18:00 KST  cron-job.org → POST GitHub API → workflow_dispatch
                                           ↓
                                 briefing.yml 즉시 실행
                                           ↓
@@ -162,16 +164,14 @@ snapshot_logs 테이블에 같은 날짜 row 있나?
                               브리핑 진행 → 카카오톡 발송
                                           ↓
                             snapshot_logs에 오늘 row 추가
-
-10:05 KST  GitHub schedule (백업)
                                           ↓
-                            has_briefing_run_for_date = True
-                                          ↓
-                              ⏭️ 중복 실행 skip
+                          health_check --post-brief (snapshot 검증)
 ```
 
-cron-job.org가 정상 동작하는 한 GitHub 백업은 항상 skip된다 (정상).
-cron-job.org가 실패한 날만 백업이 의미를 가짐.
+장애 대응:
+- cron-job.org 발화 실패 → failure notification 이메일 자동
+- 18:05까지 카톡 미수신 → GitHub Actions UI에서 `Run workflow` 수동 트리거
+- 멱등성 가드가 같은 날 중복 실행은 자동 차단
 
 ---
 

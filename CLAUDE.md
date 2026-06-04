@@ -24,3 +24,4 @@
 | 2026-05-28 | KIS raw 응답 디버그 로깅 추가 | briefing.py:_log_kis_status_debug | 거래상태 검증 false 시 stat/temp/sltr/warn 필드 + _check_tradeable 결과 WARNING 출력 |
 | 2026-06-01 | 트리거 시각 09:05 → 16:00 KST (EOD) | cron-job.org, briefing.yml, config.py, briefing.py 카톡 메시지 | 09:05는 장 개장 직후라 KIS 거래량/외국인기관 데이터 누적 전 → 후보 2개 + 0개 시그널. EOD는 하루치 데이터 확정으로 점수 시그널 최고 품질. 스윙 트레이딩 전략에 본질적으로 적합. |
 | 2026-06-01 | 트리거 시각 16:00 → 18:00 KST (EOD 정착) | cron-job.org, briefing.yml, config.py | 시간외 단일가(16:00~18:00) 종료 후 → 데이터 최완전 + 사용자 퇴근 직후 카톡 확인 가능. |
+| 2026-06-04 | GitHub Actions `schedule` 백업 제거 (cron-job.org 단독) | briefing.yml, README.md, docs/cron-job-org-setup.md | 5/5건 schedule 발화가 11~14h 지연 → 다음날 새벽 backup이 cron-job.org 18:00 메인보다 먼저 snapshot 선점 → 메인 무력화 사고 (6/2~6/4 3건 검증). cron-job.org 4일 100% 정시 발화 검증 후 단독 운영 결정. workflow_dispatch는 수동 fallback용으로 유지. 추천/점수/BLNG/threshold/REGIME_WEIGHTS/DB/카카오/health_check 로직 무변경. |

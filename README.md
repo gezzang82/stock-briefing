@@ -27,11 +27,12 @@
 - **이유 2**: 스윙 트레이딩 (14일 보유) 전략에 본질적으로 적합 — 갭 위험 < 데이터 품질
 - **이유 3**: 사용자 퇴근 직후 차분히 분석 + 다음 영업일 매수 준비
 
-### 백업 실행
+### 백업 / 수동 실행
 
-- **트리거**: GitHub Actions `schedule` (cron `30 9 * * 1-5` = UTC 09:30)
-- **시각**: 매 평일 **18:30 KST** (메인의 30분 후)
-- **의미**: cron-job.org 자체 장애 시 fallback
+- **트리거**: GitHub Actions `workflow_dispatch` (UI 또는 cron-job.org 재호출)
+- **이유**: GitHub Actions `schedule`은 5/5건 11~14시간 지연 발화로 검증됨 → 다음날 새벽 backup 발화가 cron-job.org 메인 snapshot을 선점해 메인을 무력화하는 사고 → **2026-06-04부로 `schedule` 제거**
+- **fallback 절차**: 18:05 KST까지 카톡 미수신 시 [GitHub Actions UI](https://github.com/gezzang82/stock-briefing/actions/workflows/briefing.yml)에서 "Run workflow" 수동 트리거
+- **cron-job.org 장애 인지**: cron-job.org failure notification (이메일) 자동 발송
 
 ### 중복 실행 방지
 
@@ -71,7 +72,7 @@ cron-job.org 메인 트리거 설정 → [docs/cron-job-org-setup.md](docs/cron-
 
 ## 워크플로우
 
-- `.github/workflows/briefing.yml` — 매일 평일 브리핑 (cron-job.org 메인 + GitHub 백업)
+- `.github/workflows/briefing.yml` — 매일 평일 브리핑 (cron-job.org 단독 트리거, KST 18:00)
 - `.github/workflows/weekly_report.yml` — 매주 일요일 09:00 KST 주간 리포트 + 시그널 피드백 캐시 갱신
 
 ---

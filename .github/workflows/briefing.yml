@@ -1,17 +1,23 @@
 name: 주식 브리핑
 
 on:
-  schedule:
-    # 메인 트리거는 외부 cron-job.org가 workflow_dispatch로 호출 (KST 18:00 EOD).
-    # 여기는 백업 1개만 — cron-job.org가 안 떴을 때 fallback (18:30).
-    # 멱등성 가드(snapshot_logs)가 중복 차단.
-    #
-    # KST 18:00 (시간외 단일가 종료 직후, EOD)에 맞춘 이유:
-    #   - 정규시장 + 시간외 종가 + 시간외 단일가 매매까지 모두 확정 → 데이터 최완전
-    #   - 외국인/기관 일별 매매 완전 누적 → Option C API 정상 응답 기대
-    #   - 사용자 퇴근 직후 차분히 카톡 분석 + 다음 영업일 매수 준비
-    #   - 스윙 트레이딩 (14일 보유) 전략에 본질적으로 적합
-    - cron: '30 9 * * 1-5'  # 백업 — UTC 09:30 = KST 월~금 18:30 (메인의 30분 후)
+  # 트리거: 외부 cron-job.org가 workflow_dispatch로 호출 (KST 18:00 EOD).
+  #
+  # ⚠️ GitHub Actions schedule 제거 (2026-06-04 결정):
+  #   - 5/5건 모두 11~14시간 지연 발화 → 다음날 새벽에 발화
+  #   - 결과: backup이 cron-job.org 메인보다 먼저 snapshot 선점
+  #     → 18:00 cron-job.org 발화가 멱등성 가드로 skip (메인 무력화)
+  #   - 새벽 카톡 / 휴장일 잘못된 경고 등 운영 노이즈 발생
+  #   - 데이터: 4일 검증 결과 cron-job.org 100% 정시 발화 → 단독 운영 결정
+  #
+  # cron-job.org 자체 장애 시 안전망:
+  #   - cron-job.org failure notification (이메일) 자동 발송
+  #   - 사용자가 18:05까지 카톡 미수신 시 workflow_dispatch UI에서 manual trigger 가능
+  #
+  # KST 18:00 (시간외 단일가 종료 직후, EOD)에 맞춘 이유:
+  #   - 정규시장 + 시간외 종가 + 시간외 단일가 매매까지 모두 확정 → 데이터 최완전
+  #   - 외국인/기관 일별 매매 완전 누적 → Option C API 정상 응답 기대
+  #   - 사용자 퇴근 직후 차분히 카톡 분석 + 다음 영업일 매수 준비
   workflow_dispatch:
     inputs:
       force:
