@@ -189,7 +189,64 @@ snapshot_logs 테이블에 같은 날짜 row 있나?
 
 ---
 
-## 7. 트러블슈팅
+## 7. 주간 리포트 잡 (Weekly Report) 추가
+
+briefing.yml과 동일한 구조로 weekly_report.yml도 cron-job.org 트리거로 운영. cron-job.org에 **두 번째 잡**을 추가한다.
+
+### 7-1. CREATE CRONJOB → Common 탭
+
+| 필드 | 값 |
+|---|---|
+| Title | `Stock Briefing Weekly Report 19:00 KST (Sun)` |
+| Address (URL) | `https://api.github.com/repos/gezzang82/stock-briefing/actions/workflows/weekly_report.yml/dispatches` |
+| Enabled | ✅ |
+
+> ⚠️ URL이 일일 브리핑과 다름 — `briefing.yml` 대신 **`weekly_report.yml`**.
+
+### 7-2. Schedule 탭
+
+| 필드 | 값 |
+|---|---|
+| Timezone | `Asia/Seoul (UTC+09:00)` |
+| Days of month | every |
+| Months | every |
+| Days of week | **Sun만 체크** |
+| Hours | `19` |
+| Minutes | `0` |
+
+cron 표현식으로 입력 가능하면: `0 19 * * 0` (Asia/Seoul 기준)
+
+### 7-3. Advanced 탭
+
+| 필드 | 값 |
+|---|---|
+| Request method | `POST` |
+| Request body type | `application/json` |
+| Request body (Custom data) | `{"ref":"main"}` |
+| Treat redirects as success | ✅ |
+| Request timeout | `30` seconds |
+
+### 7-4. Headers 탭 (3개 — 일일 브리핑 잡과 동일)
+
+| Header Name | Value |
+|---|---|
+| `Authorization` | `Bearer github_pat_...` (일일 브리핑 잡과 동일 PAT 재사용 가능) |
+| `Accept` | `application/vnd.github+json` |
+| `X-GitHub-Api-Version` | `2022-11-28` |
+
+### 7-5. Notifications 탭
+
+- ✅ **Notify on failure**: 잡 실패 시 이메일 알림
+
+### 7-6. 테스트
+
+1. 잡 저장 후 **"Run now"** → `204 No Content` 응답 확인
+2. GitHub Actions의 `주간 리포트` 워크플로우에서 `workflow_dispatch` 실행 확인
+3. 실제 정시 동작은 다음 일요일 19:00 KST에 카톡 도착 확인
+
+---
+
+## 8. 트러블슈팅
 
 ### "Run now"에서 401 Unauthorized
 

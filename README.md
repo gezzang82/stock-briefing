@@ -73,7 +73,7 @@ cron-job.org 메인 트리거 설정 → [docs/cron-job-org-setup.md](docs/cron-
 ## 워크플로우
 
 - `.github/workflows/briefing.yml` — 매일 평일 브리핑 (cron-job.org 단독 트리거, KST 18:00)
-- `.github/workflows/weekly_report.yml` — 매주 일요일 09:00 KST 주간 리포트 + 시그널 피드백 캐시 갱신
+- `.github/workflows/weekly_report.yml` — 매주 일요일 **19:00 KST** 주간 리포트 + 시그널 피드백 캐시 갱신 (cron-job.org 트리거)
 
 ---
 

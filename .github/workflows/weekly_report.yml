@@ -1,8 +1,16 @@
 name: 주간 리포트
 
 on:
-  schedule:
-    - cron: '0 0 * * 0'  # 매주 일요일 09:00 KST (UTC 일요일 00:00)
+  # 트리거: 외부 cron-job.org가 workflow_dispatch로 호출 (일요일 19:00 KST).
+  #
+  # ⚠️ GitHub Actions schedule 제거 (2026-06-08 결정):
+  #   - briefing.yml과 동일 문제 — schedule이 ~10시간 지연 발화
+  #     (예: 의도 일요일 09:00 KST → 실제 일요일 19:13 KST)
+  #   - 의도된 시각과 실제 도착 시각의 불일치 해소 + briefing과 트리거 구조 통일
+  #   - cron-job.org에 weekly 잡 추가 시 일요일 19:00 KST 정시 발화 보장
+  #
+  # cron-job.org 자체 장애 시 fallback:
+  #   - GitHub Actions UI에서 workflow_dispatch 수동 실행 가능
   workflow_dispatch:     # 수동 실행 가능
 
 concurrency:
